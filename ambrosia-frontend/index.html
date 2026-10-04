@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ambrosia Risk Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand" data-i18n="brand">🌿 AmbrosiaWatch</div>
+  <nav class="navlinks">
+    <a href="#home" data-i18n="nav_home">Головна</a>
+    <a href="#problem" data-i18n="nav_problem">Проблема</a>
+    <a href="#map" data-i18n="nav_map">Карта</a>
+    <a href="#methodology" data-i18n="nav_methodology">Методологія</a>
+  </nav>
+  <button id="lang-toggle" class="lang-btn">UA / EN</button>
+</header>
+
+<section id="home" class="hero">
+  <h1 data-i18n="hero_title">Карта ризику поширення амброзії в Україні</h1>
+  <p data-i18n="hero_subtitle">
+    Модель машинного навчання оцінює ймовірність присутності амброзії полинолистої
+    на основі кліматичних умов — допомагає передбачити зони ризику для здоров'я та екології.
+  </p>
+  <a href="#map" class="cta-button" data-i18n="hero_cta">Переглянути карту</a>
+</section>
+
+<section id="problem" class="section">
+  <h2 data-i18n="problem_title">Чому це важливо</h2>
+  <div class="cards">
+    <div class="card">
+      <h3 data-i18n="problem_health_title">Здоров'я людей</h3>
+      <p data-i18n="problem_health_text">
+        Пилок амброзії — одна з найсильніших причин сезонної алергії та астми.
+        Навіть невелика концентрація пилку викликає реакцію в чутливих людей.
+      </p>
+    </div>
+    <div class="card">
+      <h3 data-i18n="problem_eco_title">Екологічна шкода</h3>
+      <p data-i18n="problem_eco_text">
+        Амброзія витісняє місцеві види рослин, знижує родючість ґрунту і
+        агресивно поширюється на порушених та покинутих землях.
+      </p>
+    </div>
+    <div class="card">
+      <h3 data-i18n="problem_agri_title">Сільське господарство</h3>
+      <p data-i18n="problem_agri_text">
+        Як бур'ян, амброзія знижує врожайність сільськогосподарських культур
+        і вимагає додаткових витрат на боротьбу з нею.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="map" class="section">
+  <h2 data-i18n="map_title">Інтерактивна карта ризику</h2>
+  <p data-i18n="map_subtitle">
+    Кожна точка — розрахункова комірка (~28 км), для якої модель оцінила ризик на основі клімату 2015-2024 рр.
+  </p>
+
+  <div class="legend">
+    <span class="legend-item"><i class="dot low"></i> <span data-i18n="legend_low">Низький</span></span>
+    <span class="legend-item"><i class="dot medium"></i> <span data-i18n="legend_medium">Середній</span></span>
+    <span class="legend-item"><i class="dot high"></i> <span data-i18n="legend_high">Високий</span></span>
+  </div>
+
+  <div id="leaflet-map"></div>
+
+  <div class="search-box">
+    <h3 data-i18n="search_title">Перевірити конкретне місце</h3>
+    <p data-i18n="search_subtitle">
+      Введи координати (широта, довгота) — модель порахує ризик для цієї точки в реальному часі.
+    </p>
+    <div class="search-row">
+      <input id="lat-input" type="number" step="0.01" placeholder="Широта, напр. 49.84" />
+      <input id="lon-input" type="number" step="0.01" placeholder="Довгота, напр. 24.03" />
+      <button id="predict-btn" data-i18n="search_button">Розрахувати ризик</button>
+    </div>
+    <div id="result-box" class="result-box hidden">
+      <div id="result-main"></div>
+      <button id="explain-btn" class="explain-btn hidden" data-i18n="explain_button">
+        🤖 Пояснити простими словами
+      </button>
+      <div id="explain-text" class="explain-text hidden"></div>
+    </div>
+    <div id="error-box" class="error-box hidden"></div>
+  </div>
+</section>
+
+<section id="methodology" class="section">
+  <h2 data-i18n="method_title">Методологія</h2>
+  <ol class="method-list">
+    <li data-i18n="method_1">
+      Дані про спостереження амброзії зібрані з GBIF (Global Biodiversity Information Facility),
+      очищені за датою, координатами та точністю геолокації.
+    </li>
+    <li data-i18n="method_2">
+      Кліматичні дані (температура, опади, вологість за сезон травень-вересень, 2015-2024)
+      отримані через Open-Meteo Historical Weather API.
+    </li>
+    <li data-i18n="method_3">
+      Для навчання моделі використано збалансований набір: точки присутності виду (presence)
+      та випадково згенеровані фонові точки (pseudo-absence) в межах області спостережень.
+    </li>
+    <li data-i18n="method_4">
+      Модель — Random Forest Classifier (300 дерев), навчена та перевірена через
+      5-fold крос-валідацію (AUC-ROC ≈ 0.71).
+    </li>
+    <li data-i18n="method_5">
+      Для довільної точки на карті бекенд у реальному часі отримує кліматичні дані
+      та прогнозує ризик за допомогою цієї моделі.
+    </li>
+  </ol>
+  <p class="limitation" data-i18n="method_limitation">
+    Обмеження: модель враховує лише кліматичні фактори. Реальне поширення виду залежить
+    також від типу землекористування, транспортних шляхів та діяльності людини — це
+    напрямок для подальшого вдосконалення моделі.
+  </p>
+</section>
+
+<footer class="footer">
+  <p data-i18n="footer_text">Проєкт створено для Genius Olympiad — AI для розв'язання екологічних проблем.</p>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="i18n.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
