@@ -17,7 +17,7 @@ END_DATE = "2024-12-31"
 OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*") 
@@ -144,7 +144,10 @@ def explain():
     try:
         resp = requests.post(
             GEMINI_URL,
-            params={"key": GEMINI_API_KEY},
+            headers={
+                "x-goog-api-key": GEMINI_API_KEY,
+                "Content-Type": "application/json",
+            },
             json={"contents": [{"parts": [{"text": prompt}]}]},
             timeout=30,
         )
