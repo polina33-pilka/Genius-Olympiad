@@ -141,23 +141,35 @@ def explain():
         f"практичну пораду можна дати (наприклад, про алергію, контроль бур'яну)."
     )
 
-    try:
-        resp = requests.post(
-            GEMINI_URL,
-            headers={
-                "x-goog-api-key": GEMINI_API_KEY,
-                "Content-Type": "application/json",
-            },
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as e:
-        return jsonify({"error": f"Помилка звернення до Gemini: {e}"}), 502
+    import time
 
-    return jsonify({"explanation": text})
+    last_error = None
+    text = None
+    for attempt in range(3):
+        try:
+            resp = requests.post(
+                GEMINI_URL,
+                headers={
+                    "x-goog-api-key": GEMINI_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={"contents": [{"parts": [{"text": prompt}]}]},
+                timeout=30,
+            )
+            if resp.status_code == 503:
+                last_error = "503 Service Unavailable"
+                time.sleep(2 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            break
+        except Exception as e:
+            last_error = str(e)
+            time.sleep(2 * (attempt + 1))
+
+    if text is None:
+        return jsonify({"error": f"Помилка звернення до Gemini (після 3 спроб): {last_error}"}), 502
 
 
 if __name__ == "__main__":
