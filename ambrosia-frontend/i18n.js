@@ -21,7 +21,10 @@ const TRANSLATIONS = {
     legend_medium: "Середній",
     legend_high: "Високий",
     search_title: "Перевірити конкретне місце",
-    search_subtitle: "Введи координати (широта, довгота) — модель порахує ризик для цієї точки в реальному часі.",
+    search_subtitle: "Введи назву міста чи села або просто клікни по карті — модель порахує ризик для цієї точки.",
+    place_placeholder: "Місто або село, напр. Львів",
+    place_button: "Знайти",
+    manual_summary: "Ввести координати вручну",
     search_button: "Розрахувати ризик",
     explain_button: "🤖 Пояснити простими словами",
     method_title: "Методологія",
@@ -33,12 +36,19 @@ const TRANSLATIONS = {
     method_limitation: "Обмеження: модель враховує лише кліматичні фактори. Реальне поширення виду залежить також від типу землекористування, транспортних шляхів та діяльності людини — це напрямок для подальшого вдосконалення моделі.",
     footer_text: "Проєкт створено для Genius Olympiad — AI для розв'язання екологічних проблем.",
     result_risk: "Ризик",
+    result_place: "Місце",
+    result_point: "Точка на карті",
     result_category_low: "низький",
     result_category_medium: "середній",
     result_category_high: "високий",
+    place_pick: "Знайдено кілька місць, обери потрібне:",
+    place_not_found: "Місце не знайдено. Спробуй іншу назву.",
+    place_error: "Не вдалось виконати пошук. Спробуй ще раз.",
+    place_empty: "Введи назву місця.",
     error_fill_fields: "Будь ласка, введи коректні координати.",
     error_generic: "Сталася помилка. Спробуй ще раз.",
-    loading: "Розраховуємо..."
+    loading: "Розраховуємо...",
+    searching: "Шукаємо..."
   },
   en: {
     brand: "🌿 AmbrosiaWatch",
@@ -62,7 +72,10 @@ const TRANSLATIONS = {
     legend_medium: "Medium",
     legend_high: "High",
     search_title: "Check a specific location",
-    search_subtitle: "Enter coordinates (latitude, longitude) — the model will compute the risk for that point in real time.",
+    search_subtitle: "Type a city or village name, or just click on the map — the model will compute the risk for that point.",
+    place_placeholder: "City or village, e.g. Lviv",
+    place_button: "Search",
+    manual_summary: "Enter coordinates manually",
     search_button: "Calculate risk",
     explain_button: "🤖 Explain in plain words",
     method_title: "Methodology",
@@ -74,12 +87,19 @@ const TRANSLATIONS = {
     method_limitation: "Limitation: the model only accounts for climate factors. Real-world species spread also depends on land use, roads, and human activity — a direction for future improvement.",
     footer_text: "Built for Genius Olympiad — AI for environmental problem solving.",
     result_risk: "Risk",
+    result_place: "Place",
+    result_point: "Point on the map",
     result_category_low: "low",
     result_category_medium: "medium",
     result_category_high: "high",
+    place_pick: "Several places found, pick the right one:",
+    place_not_found: "Place not found. Try another name.",
+    place_error: "Search failed. Please try again.",
+    place_empty: "Please enter a place name.",
     error_fill_fields: "Please enter valid coordinates.",
     error_generic: "Something went wrong. Please try again.",
-    loading: "Calculating..."
+    loading: "Calculating...",
+    searching: "Searching..."
   }
 };
 
@@ -90,6 +110,10 @@ function applyTranslations() {
   document.querySelectorAll("[data-i18n]").forEach(el => {
     const key = el.getAttribute("data-i18n");
     if (dict[key]) el.textContent = dict[key];
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    const key = el.getAttribute("data-i18n-placeholder");
+    if (dict[key]) el.placeholder = dict[key];
   });
   document.documentElement.lang = currentLang;
 }
