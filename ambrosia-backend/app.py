@@ -170,6 +170,8 @@ def explain():
 
     if text is None:
         return jsonify({"error": f"Помилка звернення до Gemini (після 3 спроб): {last_error}"}), 502
+        
+    return jsonify({"explanation": text})
 
 
 if __name__ == "__main__":
