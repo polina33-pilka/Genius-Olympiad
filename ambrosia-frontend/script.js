@@ -1,37 +1,21 @@
-
 const API_BASE_URL = "https://genius-olympiad.onrender.com";
+const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
 
 const COLORS = { low: "#4caf50", medium: "#ff9800", high: "#e53935" };
 
 let map;
-let lastResult = null; // зберігаємо останній результат для кнопки "пояснити"
+let selectedMarker = null;
+let lastResult = null;
+let requestCounter = 0;
 
-function initMap() {
-  map = L.map("leaflet-map").setView([48.5, 31.5], 5.3);
+function t(key) {
+  return TRANSLATIONS[currentLang][key];
+}
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap contributors",
-    maxZoom: 10,
-  }).addTo(map);
-
-  fetch(`${API_BASE_URL}/api/risk-map`)
-    .then(r => r.json())
-    .then(geojson => {
-      geojson.features.forEach(f => {
-        const [lon, lat] = f.geometry.coordinates;
-        const cat = f.properties.risk_category;
-        L.circleMarker([lat, lon], {
-          radius: 4,
-          fillColor: COLORS[cat] || "#999",
-          color: COLORS[cat] || "#999",
-          weight: 1,
-          fillOpacity: 0.7,
-        })
-          .bindPopup(`${f.properties.risk_percent}% (${cat})`)
-          .addTo(map);
-      });
-    })
-    .catch(err => console.error("Не вдалось завантажити карту ризику:", err));
+function categoryLabel(cat) {
+  if (cat === "low") return t("result_category_low");
+  if (cat === "medium") return t("result_category_medium");
+  return t("result_category_high");
 }
 
 function showError(msg) {
@@ -44,26 +28,67 @@ function hideError() {
   document.getElementById("error-box").classList.add("hidden");
 }
 
-function categoryLabel(cat) {
-  const dict = TRANSLATIONS[currentLang];
-  if (cat === "low") return dict.result_category_low;
-  if (cat === "medium") return dict.result_category_medium;
-  return dict.result_category_high;
+function clearPlaceResults() {
+  const list = document.getElementById("place-results");
+  list.textContent = "";
+  list.classList.add("hidden");
 }
 
-async function handlePredict() {
-  hideError();
-  const latInput = document.getElementById("lat-input");
-  const lonInput = document.getElementById("lon-input");
-  const lat = parseFloat(latInput.value);
-  const lon = parseFloat(lonInput.value);
 
-  const dict = TRANSLATIONS[currentLang];
+function initMap() {
+  map = L.map("leaflet-map").setView([48.5, 31.5], 5.3);
 
-  if (isNaN(lat) || isNaN(lon)) {
-    showError(dict.error_fill_fields);
-    return;
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 10,
+  }).addTo(map);
+
+  // готова карта ризику: точки не інтерактивні, щоб клік проходив крізь них до карти
+  fetch(`${API_BASE_URL}/api/risk-map`)
+    .then(r => r.json())
+    .then(geojson => {
+      geojson.features.forEach(f => {
+        const [lon, lat] = f.geometry.coordinates;
+        const cat = f.properties.risk_category;
+        L.circleMarker([lat, lon], {
+          radius: 4,
+          fillColor: COLORS[cat] || "#999",
+          color: COLORS[cat] || "#999",
+          weight: 1,
+          fillOpacity: 0.7,
+          interactive: false,
+        }).addTo(map);
+      });
+    })
+    .catch(err => console.error("Не вдалось завантажити карту ризику:", err));
+
+  // клік по будь-якому місцю карти запускає розрахунок
+  map.on("click", e => {
+    const ll = e.latlng.wrap();
+    runPrediction(ll.lat, ll.lng, null, false);
+  });
+}
+
+function placeMarker(lat, lon, recenter) {
+  if (selectedMarker) {
+    selectedMarker.setLatLng([lat, lon]);
+  } else {
+    selectedMarker = L.circleMarker([lat, lon], {
+      radius: 9,
+      color: "#0d47a1",
+      weight: 3,
+      fillColor: "#2196f3",
+      fillOpacity: 0.9,
+    }).addTo(map);
   }
+  if (recenter) {
+    map.setView([lat, lon], Math.max(map.getZoom(), 7));
+  }
+}
+
+async function runPrediction(lat, lon, placeName, recenter) {
+  hideError();
+  const myId = ++requestCounter;
 
   const resultBox = document.getElementById("result-box");
   const resultMain = document.getElementById("result-main");
@@ -71,10 +96,13 @@ async function handlePredict() {
   const explainText = document.getElementById("explain-text");
 
   resultBox.classList.remove("hidden");
-  resultMain.textContent = dict.loading;
+  resultMain.textContent = t("loading");
   explainBtn.classList.add("hidden");
   explainText.classList.add("hidden");
   explainText.textContent = "";
+  lastResult = null;
+
+  placeMarker(lat, lon, recenter);
 
   try {
     const resp = await fetch(`${API_BASE_URL}/api/predict`, {
@@ -83,33 +111,137 @@ async function handlePredict() {
       body: JSON.stringify({ lat, lon }),
     });
     const data = await resp.json();
+    if (myId !== requestCounter) return; // прийшла відповідь на застарілий запит
 
     if (!resp.ok) {
-      showError(data.error || dict.error_generic);
+      showError(data.error || t("error_generic"));
       resultBox.classList.add("hidden");
       return;
     }
 
-    lastResult = { ...data, lat, lon };
-
-    resultMain.innerHTML = `
-      <strong>${dict.result_risk}: ${data.risk_percent}%</strong>
-      <span style="color:${COLORS[data.risk_category]}"> (${categoryLabel(data.risk_category)})</span>
-    `;
+    lastResult = { ...data, lat, lon, placeName };
+    renderResult();
     explainBtn.classList.remove("hidden");
   } catch (err) {
-    showError(dict.error_generic);
+    if (myId !== requestCounter) return;
+    showError(t("error_generic"));
     resultBox.classList.add("hidden");
   }
+}
+
+function renderResult() {
+  if (!lastResult) return;
+  const resultMain = document.getElementById("result-main");
+  resultMain.textContent = "";
+
+  const where = document.createElement("div");
+  where.textContent = lastResult.placeName
+    ? `${t("result_place")}: ${lastResult.placeName}`
+    : `${t("result_point")}: ${lastResult.lat.toFixed(2)}, ${lastResult.lon.toFixed(2)}`;
+
+  const risk = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = `${t("result_risk")}: ${lastResult.risk_percent}%`;
+  const cat = document.createElement("span");
+  cat.style.color = COLORS[lastResult.risk_category];
+  cat.textContent = ` (${categoryLabel(lastResult.risk_category)})`;
+  risk.append(strong, cat);
+
+  resultMain.append(where, risk);
+}
+
+
+function placeLabel(r) {
+  const parts = [r.name, r.admin2, r.admin1].filter(Boolean);
+  return parts.filter((p, i) => parts.indexOf(p) === i).join(", ");
+}
+
+function choosePlace(r) {
+  document.getElementById("place-input").value = r.name;
+  clearPlaceResults();
+  runPrediction(r.latitude, r.longitude, placeLabel(r), true);
+}
+
+function showPlaceList(results) {
+  const list = document.getElementById("place-results");
+  list.textContent = "";
+
+  const hint = document.createElement("div");
+  hint.className = "place-hint";
+  hint.textContent = t("place_pick");
+  list.appendChild(hint);
+
+  results.forEach(r => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "place-option";
+    btn.textContent = placeLabel(r);
+    btn.addEventListener("click", () => choosePlace(r));
+    list.appendChild(btn);
+  });
+
+  list.classList.remove("hidden");
+}
+
+async function handlePlaceSearch() {
+  hideError();
+  clearPlaceResults();
+
+  const query = document.getElementById("place-input").value.trim();
+  if (!query) {
+    showError(t("place_empty"));
+    return;
+  }
+
+  const btn = document.getElementById("place-btn");
+  btn.disabled = true;
+  btn.textContent = t("searching");
+
+  try {
+    const url =
+      `${GEOCODING_URL}?name=${encodeURIComponent(query)}` +
+      `&count=10&language=${currentLang}&format=json&countryCode=UA`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("geocoding failed");
+    const data = await resp.json();
+
+    const results = (data.results || []).filter(
+      r => !r.country_code || r.country_code === "UA"
+    );
+
+    if (results.length === 0) {
+      showError(t("place_not_found"));
+    } else if (results.length === 1) {
+      choosePlace(results[0]);
+    } else {
+      showPlaceList(results);
+    }
+  } catch (err) {
+    showError(t("place_error"));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t("place_button");
+  }
+}
+
+function handleManualPredict() {
+  hideError();
+  const lat = parseFloat(document.getElementById("lat-input").value);
+  const lon = parseFloat(document.getElementById("lon-input").value);
+
+  if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    showError(t("error_fill_fields"));
+    return;
+  }
+  runPrediction(lat, lon, null, true);
 }
 
 async function handleExplain() {
   if (!lastResult) return;
   const explainText = document.getElementById("explain-text");
-  const dict = TRANSLATIONS[currentLang];
 
   explainText.classList.remove("hidden");
-  explainText.textContent = dict.loading;
+  explainText.textContent = t("loading");
 
   try {
     const resp = await fetch(`${API_BASE_URL}/api/explain`, {
@@ -120,17 +252,28 @@ async function handleExplain() {
     const data = await resp.json();
 
     if (!resp.ok) {
-      explainText.textContent = data.error || dict.error_generic;
+      explainText.textContent = data.error || t("error_generic");
       return;
     }
     explainText.textContent = data.explanation;
   } catch (err) {
-    explainText.textContent = dict.error_generic;
+    explainText.textContent = t("error_generic");
   }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   initMap();
-  document.getElementById("predict-btn").addEventListener("click", handlePredict);
+
+  document.getElementById("place-btn").addEventListener("click", handlePlaceSearch);
+  document.getElementById("place-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") handlePlaceSearch();
+  });
+  document.getElementById("predict-btn").addEventListener("click", handleManualPredict);
   document.getElementById("explain-btn").addEventListener("click", handleExplain);
+
+  // при зміні мови перемальовуємо результат і ховаємо список знайдених місць
+  document.getElementById("lang-toggle").addEventListener("click", () => {
+    renderResult();
+    clearPlaceResults();
+  });
 });
