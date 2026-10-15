@@ -73,13 +73,24 @@
   <div class="search-box">
     <h3 data-i18n="search_title">Перевірити конкретне місце</h3>
     <p data-i18n="search_subtitle">
-      Введи координати (широта, довгота) — модель порахує ризик для цієї точки в реальному часі.
+      Введи назву міста чи села або просто клікни по карті — модель порахує ризик для цієї точки.
     </p>
+
     <div class="search-row">
-      <input id="lat-input" type="number" step="0.01" placeholder="Широта, напр. 49.84" />
-      <input id="lon-input" type="number" step="0.01" placeholder="Довгота, напр. 24.03" />
-      <button id="predict-btn" data-i18n="search_button">Розрахувати ризик</button>
+      <input id="place-input" type="text" data-i18n-placeholder="place_placeholder" placeholder="Місто або село, напр. Львів" />
+      <button id="place-btn" data-i18n="place_button">Знайти</button>
     </div>
+    <div id="place-results" class="place-results hidden"></div>
+
+    <details class="manual-coords">
+      <summary data-i18n="manual_summary">Ввести координати вручну</summary>
+      <div class="search-row">
+        <input id="lat-input" type="number" step="0.01" placeholder="Широта, напр. 49.84" />
+        <input id="lon-input" type="number" step="0.01" placeholder="Довгота, напр. 24.03" />
+        <button id="predict-btn" data-i18n="search_button">Розрахувати ризик</button>
+      </div>
+    </details>
+
     <div id="result-box" class="result-box hidden">
       <div id="result-main"></div>
       <button id="explain-btn" class="explain-btn hidden" data-i18n="explain_button">
