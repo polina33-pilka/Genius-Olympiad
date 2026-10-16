@@ -1,5 +1,6 @@
 const API_BASE_URL = "https://genius-olympiad.onrender.com";
-const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
+const NOMINATIM_URL = "https://nominatim.openstreetmap.org";
+const OPEN_METEO_GEO_URL = "https://geocoding-api.open-meteo.com/v1/search";
 
 const COLORS = { low: "#4caf50", medium: "#ff9800", high: "#e53935" };
 
@@ -34,6 +35,10 @@ function clearPlaceResults() {
   list.classList.add("hidden");
 }
 
+function uniqueJoin(parts) {
+  const clean = parts.filter(Boolean);
+  return clean.filter((p, i) => clean.indexOf(p) === i).join(", ");
+}
 
 function initMap() {
   map = L.map("leaflet-map").setView([48.5, 31.5], 5.3);
@@ -43,7 +48,6 @@ function initMap() {
     maxZoom: 10,
   }).addTo(map);
 
-  // готова карта ризику: точки не інтерактивні, щоб клік проходив крізь них до карти
   fetch(`${API_BASE_URL}/api/risk-map`)
     .then(r => r.json())
     .then(geojson => {
@@ -62,7 +66,6 @@ function initMap() {
     })
     .catch(err => console.error("Не вдалось завантажити карту ризику:", err));
 
-  // клік по будь-якому місцю карти запускає розрахунок
   map.on("click", e => {
     const ll = e.latlng.wrap();
     runPrediction(ll.lat, ll.lng, null, false);
@@ -86,6 +89,66 @@ function placeMarker(lat, lon, recenter) {
   }
 }
 
+async function reverseGeocode(lat, lon) {
+  const url =
+    `${NOMINATIM_URL}/reverse?lat=${lat}&lon=${lon}&zoom=13` +
+    `&format=jsonv2&addressdetails=1&accept-language=${currentLang}`;
+  const resp = await fetch(url);
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  const a = data.address;
+  if (!a) return null;
+
+  const name =
+    a.city || a.town || a.village || a.hamlet || a.suburb ||
+    a.municipality || a.county || a.state || "";
+  if (!name) return null;
+
+  return { name, label: uniqueJoin([name, a.county, a.state]) };
+}
+
+async function searchNominatim(query) {
+  const url =
+    `${NOMINATIM_URL}/search?q=${encodeURIComponent(query)}` +
+    `&countrycodes=ua&featureType=settlement&format=jsonv2` +
+    `&addressdetails=1&limit=10&accept-language=${currentLang}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error("nominatim failed");
+  const data = await resp.json();
+
+  return data.map(r => {
+    const a = r.address || {};
+    const name =
+      r.name || a.city || a.town || a.village || a.hamlet ||
+      (r.display_name || "").split(",")[0];
+    return {
+      name,
+      label: uniqueJoin([name, a.county || a.municipality || a.district, a.state]),
+      lat: parseFloat(r.lat),
+      lon: parseFloat(r.lon),
+    };
+  });
+}
+
+// Пошук за назвою: Open-Meteo (запасний варіант)
+async function searchOpenMeteo(query) {
+  const url =
+    `${OPEN_METEO_GEO_URL}?name=${encodeURIComponent(query)}` +
+    `&count=10&language=${currentLang}&format=json&countryCode=UA`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error("open-meteo geocoding failed");
+  const data = await resp.json();
+
+  return (data.results || [])
+    .filter(r => !r.country_code || r.country_code === "UA")
+    .map(r => ({
+      name: r.name,
+      label: uniqueJoin([r.name, r.admin2, r.admin1]),
+      lat: r.latitude,
+      lon: r.longitude,
+    }));
+}
+
 async function runPrediction(lat, lon, placeName, recenter) {
   hideError();
   const myId = ++requestCounter;
@@ -102,6 +165,9 @@ async function runPrediction(lat, lon, placeName, recenter) {
   explainText.textContent = "";
   lastResult = null;
 
+  if (!placeName) document.getElementById("place-input").value = "";
+  const reversePromise = placeName ? null : reverseGeocode(lat, lon).catch(() => null);
+
   placeMarker(lat, lon, recenter);
 
   try {
@@ -111,7 +177,7 @@ async function runPrediction(lat, lon, placeName, recenter) {
       body: JSON.stringify({ lat, lon }),
     });
     const data = await resp.json();
-    if (myId !== requestCounter) return; // прийшла відповідь на застарілий запит
+    if (myId !== requestCounter) return; 
 
     if (!resp.ok) {
       showError(data.error || t("error_generic"));
@@ -122,6 +188,15 @@ async function runPrediction(lat, lon, placeName, recenter) {
     lastResult = { ...data, lat, lon, placeName };
     renderResult();
     explainBtn.classList.remove("hidden");
+
+    if (reversePromise) {
+      reversePromise.then(place => {
+        if (!place || myId !== requestCounter || !lastResult) return;
+        lastResult.placeName = place.label;
+        document.getElementById("place-input").value = place.name;
+        renderResult();
+      });
+    }
   } catch (err) {
     if (myId !== requestCounter) return;
     showError(t("error_generic"));
@@ -151,15 +226,10 @@ function renderResult() {
 }
 
 
-function placeLabel(r) {
-  const parts = [r.name, r.admin2, r.admin1].filter(Boolean);
-  return parts.filter((p, i) => parts.indexOf(p) === i).join(", ");
-}
-
 function choosePlace(r) {
   document.getElementById("place-input").value = r.name;
   clearPlaceResults();
-  runPrediction(r.latitude, r.longitude, placeLabel(r), true);
+  runPrediction(r.lat, r.lon, r.label, true);
 }
 
 function showPlaceList(results) {
@@ -175,12 +245,24 @@ function showPlaceList(results) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "place-option";
-    btn.textContent = placeLabel(r);
+    btn.textContent = r.label;
     btn.addEventListener("click", () => choosePlace(r));
     list.appendChild(btn);
   });
 
   list.classList.remove("hidden");
+}
+
+
+function mergeResults(primary, secondary) {
+  const merged = [...primary];
+  secondary.forEach(s => {
+    const exists = merged.some(
+      p => Math.abs(p.lat - s.lat) < 0.05 && Math.abs(p.lon - s.lon) < 0.05
+    );
+    if (!exists) merged.push(s);
+  });
+  return merged.slice(0, 12);
 }
 
 async function handlePlaceSearch() {
@@ -198,15 +280,17 @@ async function handlePlaceSearch() {
   btn.textContent = t("searching");
 
   try {
-    const url =
-      `${GEOCODING_URL}?name=${encodeURIComponent(query)}` +
-      `&count=10&language=${currentLang}&format=json&countryCode=UA`;
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error("geocoding failed");
-    const data = await resp.json();
+    const [osm, meteo] = await Promise.allSettled([
+      searchNominatim(query),
+      searchOpenMeteo(query),
+    ]);
+    if (osm.status === "rejected" && meteo.status === "rejected") {
+      throw new Error("both geocoders failed");
+    }
 
-    const results = (data.results || []).filter(
-      r => !r.country_code || r.country_code === "UA"
+    const results = mergeResults(
+      osm.status === "fulfilled" ? osm.value : [],
+      meteo.status === "fulfilled" ? meteo.value : []
     );
 
     if (results.length === 0) {
@@ -271,7 +355,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("predict-btn").addEventListener("click", handleManualPredict);
   document.getElementById("explain-btn").addEventListener("click", handleExplain);
 
-  // при зміні мови перемальовуємо результат і ховаємо список знайдених місць
   document.getElementById("lang-toggle").addEventListener("click", () => {
     renderResult();
     clearPlaceResults();
