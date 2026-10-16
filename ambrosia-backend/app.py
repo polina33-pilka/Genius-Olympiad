@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from functools import lru_cache
 
 import joblib
@@ -17,10 +18,10 @@ END_DATE = "2024-12-31"
 OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*") 
+FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*")
 
 app = Flask(__name__)
 CORS(app, origins=[FRONTEND_ORIGIN] if FRONTEND_ORIGIN != "*" else "*")
@@ -122,6 +123,8 @@ def explain():
     risk_percent = body.get("risk_percent")
     risk_category = body.get("risk_category")
     climate = body.get("climate", {})
+    place_name = str(body.get("placeName") or "")[:120]
+    place_part = f" (місце: {place_name})" if place_name else ""
 
     lang_instruction = "Відповідай українською мовою." if lang == "uk" else "Respond in English."
 
@@ -130,7 +133,7 @@ def explain():
         f"Ти - асистент екологічного сайту про інвазивний вид рослини "
         f"амброзія полинолиста (Ambrosia artemisiifolia) в Україні.\n"
         f"Модель машинного навчання оцінила ризик присутності амброзії "
-        f"для координат ({lat}, {lon}):\n"
+        f"для координат ({lat}, {lon}){place_part}:\n"
         f"- Ризик: {risk_percent}% (категорія: {risk_category})\n"
         f"- Середня температура за сезон (травень-вересень): {climate.get('temp_mean')} C\n"
         f"- Середні опади за сезон: {climate.get('precip_sum')} мм/день\n"
@@ -138,10 +141,11 @@ def explain():
         f"Напиши коротке (3-5 речень), зрозуміле пояснення цього результату "
         f"для звичайної людини: що означає такий рівень ризику, чому саме "
         f"такі кліматичні умови впливають на поширення амброзії, і яку "
-        f"практичну пораду можна дати (наприклад, про алергію, контроль бур'яну)."
+        f"практичну пораду можна дати (наприклад, про алергію, контроль бур'яну).\n\n"
+        f"Починай одразу з суті, без вступних фраз на кшталт «Ось пояснення» "
+        f"чи «Ось аналіз». Не використовуй заголовків, списків і форматування, "
+        f"лише звичайний текст одним-двома абзацами."
     )
-
-    import time
 
     last_error = None
     text = None
@@ -154,13 +158,15 @@ def explain():
                     "Content-Type": "application/json",
                 },
                 json={"contents": [{"parts": [{"text": prompt}]}]},
-                timeout=30,
+                timeout=25,
             )
             if resp.status_code == 503:
-                last_error = "503 Service Unavailable"
+                last_error = "503: " + resp.text[:300]
                 time.sleep(2 * (attempt + 1))
                 continue
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                last_error = f"{resp.status_code}: {resp.text[:300]}"
+                break
             data = resp.json()
             text = data["candidates"][0]["content"]["parts"][0]["text"]
             break
@@ -169,8 +175,8 @@ def explain():
             time.sleep(2 * (attempt + 1))
 
     if text is None:
-        return jsonify({"error": f"Помилка звернення до Gemini (після 3 спроб): {last_error}"}), 502
-        
+        return jsonify({"error": f"Gemini: {last_error}"}), 502
+
     return jsonify({"explanation": text})
 
 
