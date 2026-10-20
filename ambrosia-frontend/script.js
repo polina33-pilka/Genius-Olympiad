@@ -130,7 +130,6 @@ async function searchNominatim(query) {
   });
 }
 
-// Пошук за назвою: Open-Meteo (запасний варіант)
 async function searchOpenMeteo(query) {
   const url =
     `${OPEN_METEO_GEO_URL}?name=${encodeURIComponent(query)}` +
@@ -216,15 +215,32 @@ function renderResult() {
 
   const risk = document.createElement("div");
   const strong = document.createElement("strong");
-  strong.textContent = `${t("result_risk")}: ${lastResult.risk_percent}%`;
+  strong.textContent = `${t("result_index")}: ${lastResult.risk_percent}%`;
   const cat = document.createElement("span");
   cat.style.color = COLORS[lastResult.risk_category];
   cat.textContent = ` (${categoryLabel(lastResult.risk_category)})`;
   risk.append(strong, cat);
 
   resultMain.append(where, risk);
-}
 
+  if (lastResult.percentile != null) {
+    const pct = document.createElement("div");
+    pct.textContent = t("result_percentile").replace("{n}", lastResult.percentile);
+    resultMain.appendChild(pct);
+  }
+  if (lastResult.land) {
+    const land = document.createElement("div");
+    land.textContent =
+      `${t("result_land")}: ${t("land_cropland")} ${Math.round(lastResult.land.cropland * 100)}%, ` +
+      `${t("land_built")} ${Math.round(lastResult.land.built * 100)}%`;
+    resultMain.appendChild(land);
+  }
+  const note = document.createElement("div");
+  note.style.fontSize = "0.85rem";
+  note.style.color = "#555";
+  note.textContent = t("result_note");
+  resultMain.appendChild(note);
+}
 
 function choosePlace(r) {
   document.getElementById("place-input").value = r.name;
