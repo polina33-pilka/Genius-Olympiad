@@ -1,17 +1,17 @@
-import os
 import json
+import os
 import time
 from functools import lru_cache
 
 import joblib
 import numpy as np
+import pandas as pd
 import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "data", "ambrosia_risk_model.joblib")
-RISK_MAP_PATH = os.path.join(BASE_DIR, "data", "risk_map.geojson")
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 START_DATE = "2015-01-01"
 END_DATE = "2024-12-31"
@@ -26,18 +26,38 @@ FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*")
 app = Flask(__name__)
 CORS(app, origins=[FRONTEND_ORIGIN] if FRONTEND_ORIGIN != "*" else "*")
 
-model = joblib.load(MODEL_PATH)
+model = joblib.load(os.path.join(DATA_DIR, "ambrosia_risk_model_v2.joblib"))
 
-with open(RISK_MAP_PATH, "r", encoding="utf-8") as f:
+with open(os.path.join(DATA_DIR, "model_v2_meta.json"), "r", encoding="utf-8") as f:
+    META = json.load(f)
+FEATURES = META["features"]
+T_MEDIUM = META["threshold_medium"]
+T_HIGH = META["threshold_high"]
+
+with open(os.path.join(DATA_DIR, "risk_map_v2.geojson"), "r", encoding="utf-8") as f:
     RISK_MAP = json.load(f)
+MAP_RISKS = np.sort(np.array([ft["properties"]["risk_percent"] for ft in RISK_MAP["features"]]))
+
+_land = pd.read_csv(os.path.join(DATA_DIR, "landcover_lookup.csv"))
+LAND = {
+    (int(r.lat10), int(r.lon10)): (float(r.cropland), float(r.built))
+    for r in _land.itertuples()
+}
 
 
 def categorize(p):
-    if p < 0.33:
+    """Відносні категорії: пороги взято з розподілу ризику на карті України."""
+    if p < T_MEDIUM:
         return "low"
-    elif p < 0.66:
+    if p < T_HIGH:
         return "medium"
     return "high"
+
+
+def percentile_on_map(risk_percent):
+    """Частка точок карти України, де індекс нижчий за цей."""
+    p = np.searchsorted(MAP_RISKS, risk_percent, side="left") / len(MAP_RISKS) * 100
+    return int(min(99, max(1, round(p))))
 
 
 @lru_cache(maxsize=2048)
@@ -56,18 +76,19 @@ def fetch_climate(lat_rounded, lon_rounded):
     resp.raise_for_status()
     data = resp.json()
 
-    import pandas as pd
-
     daily = pd.DataFrame(data["daily"])
     daily["time"] = pd.to_datetime(daily["time"])
     daily["month"] = daily["time"].dt.month
     season = daily[(daily["month"] >= 5) & (daily["month"] <= 9)]
 
-    return {
+    climate = {
         "temp_mean": float(season["temperature_2m_mean"].mean()),
         "precip_sum": float(season["precipitation_sum"].mean()),
         "humidity_mean": float(season["relative_humidity_2m_mean"].mean()),
     }
+    if any(np.isnan(v) for v in climate.values()):
+        raise ValueError("немає кліматичних даних для цієї точки")
+    return climate
 
 
 @app.route("/api/health", methods=["GET"])
@@ -77,7 +98,7 @@ def health():
 
 @app.route("/api/risk-map", methods=["GET"])
 def risk_map():
-    """Віддає готову GeoJSON-карту ризику (1852 точки) для відображення."""
+    """Віддає готову GeoJSON-карту відносного індексу (модель v2)."""
     return jsonify(RISK_MAP)
 
 
@@ -90,24 +111,51 @@ def predict():
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "Потрібні числові поля 'lat' та 'lon'."}), 400
 
-    lat_rounded = round(lat, 1)
-    lon_rounded = round(lon, 1)
+    lat10 = int(round(lat * 10))
+    lon10 = int(round(lon * 10))
+
+    land = LAND.get((lat10, lon10))
+    if land is None:
+        return jsonify({
+            "error": "Для цієї точки немає даних про землекористування "
+                     "(море або місце поза територією, яку покриває модель)."
+        }), 422
 
     try:
-        climate = fetch_climate(lat_rounded, lon_rounded)
+        climate = fetch_climate(round(lat10 / 10, 1), round(lon10 / 10, 1))
     except Exception as e:
         return jsonify({"error": f"Не вдалось отримати кліматичні дані: {e}"}), 502
 
-    X = np.array([[climate["temp_mean"], climate["precip_sum"], climate["humidity_mean"]]])
-    risk_proba = float(model.predict_proba(X)[0, 1])
+    row = {**climate, "cropland": land[0], "built": land[1]}
+    X = pd.DataFrame([row], columns=FEATURES)
+    risk = float(model.predict_proba(X)[0, 1])
+    risk_percent = round(risk * 100, 1)
 
     return jsonify({
         "lat": lat,
         "lon": lon,
-        "risk_percent": round(risk_proba * 100, 1),
-        "risk_category": categorize(risk_proba),
+        "risk_percent": risk_percent,
+        "risk_category": categorize(risk),
+        "percentile": percentile_on_map(risk_percent),
         "climate": climate,
+        "land": {"cropland": round(land[0], 3), "built": round(land[1], 3)},
     })
+
+
+def num(value, digits=1):
+    try:
+        v = round(float(value), digits)
+        return int(v) if digits == 0 else v
+    except (TypeError, ValueError):
+        return "невідомо"
+
+
+def pct(value):
+    """Частка 0-1 -> відсотки цілим числом."""
+    try:
+        return int(round(float(value) * 100))
+    except (TypeError, ValueError):
+        return "невідомо"
 
 
 @app.route("/api/explain", methods=["POST"])
@@ -118,33 +166,43 @@ def explain():
         return jsonify({"error": "GEMINI_API_KEY не налаштовано на сервері."}), 500
 
     lang = body.get("lang", "uk")
-    lat = body.get("lat")
-    lon = body.get("lon")
-    risk_percent = body.get("risk_percent")
-    risk_category = body.get("risk_category")
-    climate = body.get("climate", {})
-    place_name = str(body.get("placeName") or "")[:120]
-    place_part = f" (місце: {place_name})" if place_name else ""
+    lat = num(body.get("lat"), 3)
+    lon = num(body.get("lon"), 3)
+    risk_percent = num(body.get("risk_percent"))
+    percentile = num(body.get("percentile"), 0)
+    category = body.get("risk_category")
+    climate = body.get("climate") or {}
+    land = body.get("land") or {}
+
+    place_name = " ".join(str(body.get("placeName") or "").split())[:120]
+    place_part = f", місце: {place_name}" if place_name else ""
+    cat_label = {"low": "низька", "medium": "середня", "high": "висока"}.get(category, "невідома")
+
+    crop_pct = pct(land.get("cropland"))
+    built_pct = pct(land.get("built"))
 
     lang_instruction = "Відповідай українською мовою." if lang == "uk" else "Respond in English."
 
     prompt = (
         f"{lang_instruction}\n\n"
-        f"Ти - асистент екологічного сайту про інвазивний вид рослини "
-        f"амброзія полинолиста (Ambrosia artemisiifolia) в Україні.\n"
-        f"Модель машинного навчання оцінила ризик присутності амброзії "
-        f"для координат ({lat}, {lon}){place_part}:\n"
-        f"- Ризик: {risk_percent}% (категорія: {risk_category})\n"
-        f"- Середня температура за сезон (травень-вересень): {climate.get('temp_mean')} C\n"
-        f"- Середні опади за сезон: {climate.get('precip_sum')} мм/день\n"
-        f"- Середня вологість: {climate.get('humidity_mean')}%\n\n"
-        f"Напиши коротке (3-5 речень), зрозуміле пояснення цього результату "
-        f"для звичайної людини: що означає такий рівень ризику, чому саме "
-        f"такі кліматичні умови впливають на поширення амброзії, і яку "
-        f"практичну пораду можна дати (наприклад, про алергію, контроль бур'яну).\n\n"
-        f"Починай одразу з суті, без вступних фраз на кшталт «Ось пояснення» "
-        f"чи «Ось аналіз». Не використовуй заголовків, списків і форматування, "
-        f"лише звичайний текст одним-двома абзацами."
+        "Ти - асистент екологічного сайту про інвазивну рослину амброзію полинолисту "
+        "(Ambrosia artemisiifolia) в Україні.\n"
+        "Модель машинного навчання оцінила, наскільки умови в цій місцевості схожі на ті, "
+        f"де амброзію вже фіксували (координати {lat}, {lon}{place_part}). "
+        "Це відносний індекс придатності, а не ймовірність того, що амброзія тут росте.\n"
+        f"- Індекс: {risk_percent}% (вище, ніж на {percentile}% території України; "
+        f"категорія: {cat_label})\n"
+        f"- Середня температура за сезон (травень-вересень): {num(climate.get('temp_mean'))} C\n"
+        f"- Середні опади за сезон: {num(climate.get('precip_sum'))} мм/день\n"
+        f"- Середня вологість: {num(climate.get('humidity_mean'))}%\n"
+        f"- Частка пашні в околі: {crop_pct}%\n"
+        f"- Частка забудови в околі: {built_pct}%\n\n"
+        "Напиши коротке (3-5 речень) пояснення для звичайної людини: що означає такий "
+        "результат, які з цих умов могли на нього вплинути і яку практичну пораду можна "
+        "дати (алергія, контроль бур'яну). Наприкінці одним реченням зазнач, що це "
+        "орієнтовна оцінка, а не підтверджена наявність рослини.\n\n"
+        "Починай одразу з суті, без вступних фраз на кшталт «Ось пояснення». "
+        "Не використовуй заголовків, списків і форматування, лише звичайний текст."
     )
 
     last_error = None
