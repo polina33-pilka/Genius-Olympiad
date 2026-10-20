@@ -1,0 +1,13 @@
+{
+  "features": [
+    "temp_mean",
+    "precip_sum",
+    "humidity_mean",
+    "cropland",
+    "built"
+  ],
+  "threshold_medium": 0.4104451631186836,
+  "threshold_high": 0.5912624806038418,
+  "cv_auc_regions": 0.696,
+  "sklearn_version": "1.5.1"
+}
