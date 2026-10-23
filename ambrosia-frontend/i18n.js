@@ -34,7 +34,7 @@ const TRANSLATIONS = {
     method_4: "Модель — Random Forest (500 дерев). Перевірка на регіонах, яких модель не бачила (просторова крос-валідація, блоки 2°): AUC-ROC ≈ 0.70.",
     method_5: "Для довільної точки бекенд у реальному часі отримує клімат, знаходить частки землі, рахує індекс і порівнює його з розподілом по території України. Категорії відносні: нижні 50% точок карти, наступні 30% та верхні 20%.",
     method_limitation: "Обмеження: це відносний індекс придатності, а не ймовірність наявності амброзії. Точність помірна (AUC ≈ 0.70). «Відсутність» у навчальних даних — лише фонові точки. Оцінка надійніша там, де багато спостерігачів, а в великих містах індекс може бути завищеним. Земля — знімок 2020 року; дороги та динаміка не враховані.",
-    footer_text: "Модель оцінки придатності територій для амброзії полинолистої на основі машинного навчання. Дані: GBIF · Open-Meteo · ESA WorldCover 2020 · © OpenStreetMap contributors",
+    footer_text: "AmbrosiaWatch — оцінка придатності територій для амброзії полинолистої в Україні. Дані: GBIF · Open-Meteo · ESA WorldCover 2020 · © OpenStreetMap contributors",
     result_index: "Індекс придатності",
     result_percentile: "Вище, ніж на {n}% території України",
     result_land: "Земля в околі",
@@ -52,6 +52,7 @@ const TRANSLATIONS = {
     place_empty: "Введи назву місця.",
     error_fill_fields: "Будь ласка, введи коректні координати.",
     error_generic: "Сталася помилка. Спробуй ще раз.",
+    error_outside_ukraine: "Ця точка поза Україною. Модель навчена на даних України, тому для таких місць результат не розраховується.",
     loading: "Розраховуємо...",
     searching: "Шукаємо..."
   },
@@ -90,7 +91,7 @@ const TRANSLATIONS = {
     method_4: "The model is a Random Forest (500 trees). Tested on regions it has not seen (spatial cross-validation, 2° blocks): AUC-ROC ≈ 0.70.",
     method_5: "For any point the backend fetches live climate, looks up the land shares, computes the index and compares it with the distribution across Ukraine. Categories are relative: the lowest 50% of map points, the next 30% and the top 20%.",
     method_limitation: "Limitations: this is a relative suitability index, not a probability that ragweed is present. Accuracy is moderate (AUC ≈ 0.70). Training 'absences' are only background points. Estimates are more reliable where many observers are active, and the index may be inflated in large cities. Land cover is a 2020 snapshot; roads and change over time are not included.",
-    footer_text: "Machine learning model for assessing common ragweed habitat suitability. Data: GBIF · Open-Meteo · ESA WorldCover 2020 · © OpenStreetMap contributors",
+    footer_text: "AmbrosiaWatch — assessment of territory suitability for common ragweed in Ukraine. Data: GBIF · Open-Meteo · ESA WorldCover 2020 · © OpenStreetMap contributors",
     result_index: "Suitability index",
     result_percentile: "Higher than {n}% of Ukraine's territory",
     result_land: "Land in the area",
@@ -108,6 +109,7 @@ const TRANSLATIONS = {
     place_empty: "Please enter a place name.",
     error_fill_fields: "Please enter valid coordinates.",
     error_generic: "Something went wrong. Please try again.",
+    error_outside_ukraine: "This point is outside Ukraine. The model was trained on Ukrainian data, so no result is calculated for such places.",
     loading: "Calculating...",
     searching: "Searching..."
   }
