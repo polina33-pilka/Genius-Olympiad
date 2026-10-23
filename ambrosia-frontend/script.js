@@ -89,6 +89,8 @@ function placeMarker(lat, lon, recenter) {
   }
 }
 
+const FOREIGN_COUNTRIES = ["ro", "md", "pl", "sk", "hu", "by"];
+
 async function reverseGeocode(lat, lon) {
   const url =
     `${NOMINATIM_URL}/reverse?lat=${lat}&lon=${lon}&zoom=13` +
@@ -104,7 +106,11 @@ async function reverseGeocode(lat, lon) {
     a.municipality || a.county || a.state || "";
   if (!name) return null;
 
-  return { name, label: uniqueJoin([name, a.county, a.state]) };
+  return {
+    name,
+    label: uniqueJoin([name, a.county, a.state]),
+    country: (a.country_code || "").toLowerCase(),
+  };
 }
 
 async function searchNominatim(query) {
@@ -165,9 +171,18 @@ async function runPrediction(lat, lon, placeName, recenter) {
   lastResult = null;
 
   if (!placeName) document.getElementById("place-input").value = "";
-  const reversePromise = placeName ? null : reverseGeocode(lat, lon).catch(() => null);
-
   placeMarker(lat, lon, recenter);
+
+  let reversed = null;
+  if (!placeName) {
+    reversed = await reverseGeocode(lat, lon).catch(() => null);
+    if (myId !== requestCounter) return;
+    if (reversed && FOREIGN_COUNTRIES.includes(reversed.country)) {
+      showError(t("error_outside_ukraine"));
+      resultBox.classList.add("hidden");
+      return;
+    }
+  }
 
   try {
     const resp = await fetch(`${API_BASE_URL}/api/predict`, {
@@ -176,7 +191,7 @@ async function runPrediction(lat, lon, placeName, recenter) {
       body: JSON.stringify({ lat, lon }),
     });
     const data = await resp.json();
-    if (myId !== requestCounter) return; 
+    if (myId !== requestCounter) return;
 
     if (!resp.ok) {
       showError(data.error || t("error_generic"));
@@ -184,18 +199,10 @@ async function runPrediction(lat, lon, placeName, recenter) {
       return;
     }
 
-    lastResult = { ...data, lat, lon, placeName };
+    lastResult = { ...data, lat, lon, placeName: placeName || (reversed && reversed.label) || null };
+    if (reversed) document.getElementById("place-input").value = reversed.name;
     renderResult();
     explainBtn.classList.remove("hidden");
-
-    if (reversePromise) {
-      reversePromise.then(place => {
-        if (!place || myId !== requestCounter || !lastResult) return;
-        lastResult.placeName = place.label;
-        document.getElementById("place-input").value = place.name;
-        renderResult();
-      });
-    }
   } catch (err) {
     if (myId !== requestCounter) return;
     showError(t("error_generic"));
