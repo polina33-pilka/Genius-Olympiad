@@ -46,6 +46,16 @@ function uniqueJoin(parts) {
   return clean.filter((p, i) => clean.indexOf(p) === i).join(", ");
 }
 
+function isInsideUkraine(lat, lon) {
+  if (lat < 44.3 || lat > 52.4 || lon < 22.1 || lon > 40.3) return false;
+  if (lat > 51.5 && (lon < 30.8 || lon > 33.3)) return false;
+  if (lat > 52.0) return false;
+  if (lon > 38.5 && lat > 49.5) return false;
+  if (lon > 37.5 && lat > 50.5) return false;
+  if (lon < 22.5 && lat > 49.6) return false;
+  return true;
+}
+
 function initMap() {
   map = L.map("leaflet-map", {
     minZoom: 5,
@@ -63,6 +73,7 @@ function initMap() {
     .then(geojson => {
       geojson.features.forEach(f => {
         const [lon, lat] = f.geometry.coordinates;
+        if (!isInsideUkraine(lat, lon)) return;
         const cat = f.properties.risk_category;
         L.circleMarker([lat, lon], {
           radius: 4,
