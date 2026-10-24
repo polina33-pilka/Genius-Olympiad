@@ -2,7 +2,13 @@ const API_BASE_URL = "https://genius-olympiad.onrender.com";
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org";
 const OPEN_METEO_GEO_URL = "https://geocoding-api.open-meteo.com/v1/search";
 
-const COLORS = { low: "#4caf50", medium: "#ff9800", high: "#e53935" };
+const COLORS = { low: "#2e7d32", medium: "#f59e0b", high: "#dc2626" };
+
+const FOREIGN_COUNTRIES = ["ro", "md", "pl", "sk", "hu", "by"];
+
+const WAKE_HINT_MS = 5000;
+
+const MAP_BOUNDS = [[42.5, 20.0], [54.0, 42.5]];
 
 let map;
 let selectedMarker = null;
@@ -41,7 +47,11 @@ function uniqueJoin(parts) {
 }
 
 function initMap() {
-  map = L.map("leaflet-map").setView([48.5, 31.5], 5.3);
+  map = L.map("leaflet-map", {
+    minZoom: 5,
+    maxBounds: MAP_BOUNDS,
+    maxBoundsViscosity: 0.8,
+  }).setView([48.5, 31.5], 5.3);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors",
@@ -59,12 +69,12 @@ function initMap() {
           fillColor: COLORS[cat] || "#999",
           color: COLORS[cat] || "#999",
           weight: 1,
-          fillOpacity: 0.7,
+          fillOpacity: 0.75,
           interactive: false,
         }).addTo(map);
       });
     })
-    .catch(err => console.error("Не вдалось завантажити карту ризику:", err));
+    .catch(err => console.error("Error loading risk map:", err));
 
   map.on("click", e => {
     const ll = e.latlng.wrap();
@@ -78,9 +88,9 @@ function placeMarker(lat, lon, recenter) {
   } else {
     selectedMarker = L.circleMarker([lat, lon], {
       radius: 9,
-      color: "#0d47a1",
+      color: "#132e21",
       weight: 3,
-      fillColor: "#2196f3",
+      fillColor: "#2e7d32",
       fillOpacity: 0.9,
     }).addTo(map);
   }
@@ -88,8 +98,6 @@ function placeMarker(lat, lon, recenter) {
     map.setView([lat, lon], Math.max(map.getZoom(), 7));
   }
 }
-
-const FOREIGN_COUNTRIES = ["ro", "md", "pl", "sk", "hu", "by"];
 
 async function reverseGeocode(lat, lon) {
   const url =
@@ -184,6 +192,10 @@ async function runPrediction(lat, lon, placeName, recenter) {
     }
   }
 
+  const wakeTimer = setTimeout(() => {
+    if (myId === requestCounter && !lastResult) resultMain.textContent = t("waking");
+  }, WAKE_HINT_MS);
+
   try {
     const resp = await fetch(`${API_BASE_URL}/api/predict`, {
       method: "POST",
@@ -207,6 +219,8 @@ async function runPrediction(lat, lon, placeName, recenter) {
     if (myId !== requestCounter) return;
     showError(t("error_generic"));
     resultBox.classList.add("hidden");
+  } finally {
+    clearTimeout(wakeTimer);
   }
 }
 
@@ -242,6 +256,15 @@ function renderResult() {
       `${t("land_built")} ${Math.round(lastResult.land.built * 100)}%`;
     resultMain.appendChild(land);
   }
+  if (lastResult.climate) {
+    const c = lastResult.climate;
+    const clim = document.createElement("div");
+    clim.textContent = t("result_climate")
+      .replace("{t}", Number(c.temp_mean).toFixed(1))
+      .replace("{p}", Number(c.precip_sum).toFixed(1))
+      .replace("{h}", Math.round(c.humidity_mean));
+    resultMain.appendChild(clim);
+  }
   const note = document.createElement("div");
   note.style.fontSize = "0.85rem";
   note.style.color = "#555";
@@ -275,7 +298,6 @@ function showPlaceList(results) {
 
   list.classList.remove("hidden");
 }
-
 
 function mergeResults(primary, secondary) {
   const merged = [...primary];
@@ -350,6 +372,11 @@ async function handleExplain() {
   explainText.classList.remove("hidden");
   explainText.textContent = t("loading");
 
+  let done = false;
+  const wakeTimer = setTimeout(() => {
+    if (!done) explainText.textContent = t("waking");
+  }, WAKE_HINT_MS);
+
   try {
     const resp = await fetch(`${API_BASE_URL}/api/explain`, {
       method: "POST",
@@ -357,14 +384,19 @@ async function handleExplain() {
       body: JSON.stringify({ ...lastResult, lang: currentLang }),
     });
     const data = await resp.json();
+    done = true;
 
     if (!resp.ok) {
       explainText.textContent = data.error || t("error_generic");
       return;
     }
-    explainText.textContent = data.explanation;
+    explainText.textContent =
+      data.explanation + (data.fallback ? "\n\n" + t("explain_fallback_note") : "");
   } catch (err) {
     explainText.textContent = t("error_generic");
+  } finally {
+    done = true;
+    clearTimeout(wakeTimer);
   }
 }
 
