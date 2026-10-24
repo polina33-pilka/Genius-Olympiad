@@ -521,8 +521,15 @@ async function handleExplain() {
       explainText.textContent = apiErrorMessage(data);
       return;
     }
-    explainText.textContent =
-      data.explanation + (data.fallback ? "\n\n" + t("explain_fallback_note") : "");
+    explainText.textContent = "";
+    const body = document.createElement("div");
+    body.textContent = data.explanation;
+    const note = document.createElement("div");
+    note.style.fontSize = "0.85rem";
+    note.style.color = "#555";
+    note.style.marginTop = "0.6rem";
+    note.textContent = data.fallback ? t("explain_fallback_note") : t("explain_ai_note");
+    explainText.append(body, note);
   } catch (err) {
     explainText.textContent = t("error_generic");
   } finally {
