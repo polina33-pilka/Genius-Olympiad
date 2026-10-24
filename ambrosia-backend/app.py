@@ -20,6 +20,8 @@ OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+GEMINI_TIMEOUT = 12
+GEMINI_ATTEMPTS = 2
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*")
 
@@ -46,7 +48,6 @@ LAND = {
 
 
 def categorize(p):
-    """Відносні категорії: пороги взято з розподілу ризику на карті України."""
     if p < T_MEDIUM:
         return "low"
     if p < T_HIGH:
@@ -55,15 +56,12 @@ def categorize(p):
 
 
 def percentile_on_map(risk_percent):
-    """Частка точок карти України, де індекс нижчий за цей."""
     p = np.searchsorted(MAP_RISKS, risk_percent, side="left") / len(MAP_RISKS) * 100
     return int(min(99, max(1, round(p))))
 
 
 @lru_cache(maxsize=2048)
 def fetch_climate(lat_rounded, lon_rounded):
-    """Качає кліматичні дані для координат (округлених до 0.1) з кешем,
-    щоб не бити по Open-Meteo повторно за ту саму точку."""
     params = {
         "latitude": lat_rounded,
         "longitude": lon_rounded,
@@ -98,7 +96,6 @@ def health():
 
 @app.route("/api/risk-map", methods=["GET"])
 def risk_map():
-    """Віддає готову GeoJSON-карту відносного індексу (модель v2)."""
     return jsonify(RISK_MAP)
 
 
@@ -151,19 +148,97 @@ def num(value, digits=1):
 
 
 def pct(value):
-    """Частка 0-1 -> відсотки цілим числом."""
     try:
         return int(round(float(value) * 100))
     except (TypeError, ValueError):
         return "невідомо"
 
 
+def to_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def fallback_explanation(lang, place_name, risk_percent, percentile, category, climate, land):
+    uk = lang != "en"
+    rp = to_float(risk_percent)
+    pc = to_float(percentile)
+    if rp is None or pc is None:
+        return ("Пояснення від ШІ зараз недоступне. Індекс придатності — відносна оцінка того, "
+                "наскільки умови схожі на місця, де фіксували амброзію; це не підтверджена "
+                "наявність рослини." if uk else
+                "The AI explanation is unavailable right now. The suitability index is a relative "
+                "estimate of how similar conditions are to places where ragweed has been recorded; "
+                "it does not confirm that the plant is present.")
+    pc = int(round(pc))
+    built = to_float((land or {}).get("built"))
+    cropland = to_float((land or {}).get("cropland"))
+    temp = to_float((climate or {}).get("temp_mean"))
+    hum = to_float((climate or {}).get("humidity_mean"))
+
+    if uk:
+        level = {"low": "нижча", "medium": "середня", "high": "вища"}.get(category, "невизначена")
+        intro = f"Для місця «{place_name}» " if place_name else "Для цієї точки "
+        parts = [intro + f"індекс придатності становить {rp:.1f}% (категорія: {level}), "
+                          f"тобто більше, ніж на {pc}% території України."]
+
+        drivers = []
+        if built is not None and built >= 0.15:
+            drivers.append("значна частка забудови")
+        if cropland is not None and cropland >= 0.4:
+            drivers.append("значна частка пашні")
+        if drivers:
+            parts.append("В околі є " + " і ".join(drivers) +
+                         ", а такі порушені землі амброзія заселяє найлегше.")
+        else:
+            parts.append("Частка пашні та забудови в околі невелика.")
+        if temp is not None and hum is not None:
+            parts.append(f"Середня температура за сезон травень-вересень — {temp:.1f} °C, "
+                         f"вологість — {hum:.0f}%.")
+        parts.append("Це орієнтовна оцінка схожості умов на місця, де фіксували амброзію, "
+                     "а не підтверджена наявність рослини.")
+        if category == "low":
+            parts.append("Поодинокі рослини можливі й тут: помічену амброзію варто "
+                         "видаляти з корінням до цвітіння.")
+        else:
+            parts.append("Алергікам у період цвітіння (серпень-вересень) варто обмежувати "
+                         "перебування на вулиці в сухі вітряні дні, а помічену рослину "
+                         "видаляти з корінням до утворення насіння.")
+        return " ".join(parts)
+
+    level = {"low": "lower", "medium": "medium", "high": "higher"}.get(category, "undetermined")
+    intro = f"For {place_name}, " if place_name else "For this point, "
+    parts = [intro + f"the suitability index is {rp:.1f}% (category: {level}), "
+                      f"which is higher than in {pc}% of Ukraine's territory."]
+    drivers = []
+    if built is not None and built >= 0.15:
+        drivers.append("a large share of built-up land")
+    if cropland is not None and cropland >= 0.4:
+        drivers.append("a large share of cropland")
+    if drivers:
+        parts.append("The surroundings have " + " and ".join(drivers) +
+                     ", the kind of disturbed land ragweed colonises most easily.")
+    else:
+        parts.append("The share of cropland and built-up land nearby is small.")
+    if temp is not None and hum is not None:
+        parts.append(f"The mean May-September temperature is {temp:.1f} °C and humidity is {hum:.0f}%.")
+    parts.append("This is a rough estimate of how similar conditions are to places where "
+                 "ragweed has been recorded, not confirmation that the plant is present.")
+    if category == "low":
+        parts.append("Single plants are still possible here: pull any ragweed you notice, "
+                     "roots included, before it flows.")
+    else:
+        parts.append("People with allergies should limit time outdoors on dry, windy days "
+                     "during flowering (August-September), and any ragweed you find should "
+                     "be pulled out with its roots before it sets seed.")
+    return " ".join(parts)
+
+
 @app.route("/api/explain", methods=["POST"])
 def explain():
     body = request.get_json(force=True, silent=True) or {}
-
-    if not GEMINI_API_KEY:
-        return jsonify({"error": "GEMINI_API_KEY не налаштовано на сервері."}), 500
 
     lang = body.get("lang", "uk")
     lat = num(body.get("lat"), 3)
@@ -208,9 +283,9 @@ def explain():
         "Не використовуй заголовків, списків і форматування, лише звичайний текст."
     )
 
-    last_error = None
+    last_error = None if GEMINI_API_KEY else "GEMINI_API_KEY не налаштовано"
     text = None
-    for attempt in range(3):
+    for attempt in range(GEMINI_ATTEMPTS if GEMINI_API_KEY else 0):
         try:
             resp = requests.post(
                 GEMINI_URL,
@@ -219,7 +294,7 @@ def explain():
                     "Content-Type": "application/json",
                 },
                 json={"contents": [{"parts": [{"text": prompt}]}]},
-                timeout=25,
+                timeout=GEMINI_TIMEOUT,
             )
             if resp.status_code == 503:
                 last_error = "503: " + resp.text[:300]
@@ -236,7 +311,11 @@ def explain():
             time.sleep(2 * (attempt + 1))
 
     if text is None:
-        return jsonify({"error": f"Gemini: {last_error}"}), 502
+        return jsonify({
+            "explanation": fallback_explanation(
+                lang, place_name, risk_percent, percentile, category, climate, land),
+            "fallback": True,
+        })
 
     return jsonify({"explanation": text})
 
