@@ -49,6 +49,11 @@ function t(key) {
   return TRANSLATIONS[currentLang][key];
 }
 
+function formatNumber(value) {
+  const text = String(value);
+  return currentLang === "uk" ? text.replace(".", ",") : text;
+}
+
 function categoryLabel(cat) {
   if (cat === "low") return t("result_category_low");
   if (cat === "medium") return t("result_category_medium");
@@ -296,7 +301,7 @@ function renderResult() {
 
   const risk = document.createElement("div");
   const strong = document.createElement("strong");
-  strong.textContent = `${t("result_index")}: ${lastResult.risk_percent}%`;
+  strong.textContent = `${t("result_index")}: ${formatNumber(lastResult.risk_percent)}%`;
   const cat = document.createElement("span");
   cat.style.color = COLORS[lastResult.risk_category];
   cat.textContent = ` (${categoryLabel(lastResult.risk_category)})`;
@@ -320,8 +325,8 @@ function renderResult() {
     const c = lastResult.climate;
     const clim = document.createElement("div");
     clim.textContent = t("result_climate")
-      .replace("{t}", Number(c.temp_mean).toFixed(1))
-      .replace("{p}", Number(c.precip_sum).toFixed(1))
+      .replace("{t}", formatNumber(Number(c.temp_mean).toFixed(1)))
+      .replace("{p}", formatNumber(Number(c.precip_sum).toFixed(1)))
       .replace("{h}", Math.round(c.humidity_mean));
     resultMain.appendChild(clim);
   }
