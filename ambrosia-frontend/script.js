@@ -245,6 +245,37 @@ async function reverseGeocode(lat, lon) {
   };
 }
 
+const NON_SETTLEMENT_TYPES = [
+  "state", "region", "province", "state_district", "county", "district", "municipality", "country",
+];
+
+function isRegionResult(r) {
+  if (NON_SETTLEMENT_TYPES.includes(r.addresstype)) return true;
+  return typeof r.place_rank === "number" && r.place_rank < 13;
+}
+
+function normalizeText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/['’ʼ`]/g, "")
+    .replace(/[.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function nameMatches(q, r) {
+  const names = [r.name, ...Object.values(r.namedetails || {})].filter(Boolean);
+  return names.some(n => {
+    const plain = normalizeText(n);
+    return plain.includes(q) || normalizeText(toLatin(n)).includes(q);
+  });
+}
+
+function stateMatches(q, r) {
+  const a = r.address || {};
+  return [a.state, a.county].some(v => v && normalizeText(v).includes(q));
+}
+
 async function searchNominatim(query) {
   const url =
     `${NOMINATIM_URL}/search?q=${encodeURIComponent(query)}` +
@@ -254,7 +285,14 @@ async function searchNominatim(query) {
   if (!resp.ok) throw new Error("nominatim failed");
   const data = await resp.json();
 
-  return data.map(r => {
+  const places = data.filter(r => !isRegionResult(r));
+
+  const q = normalizeText(query);
+  const named = places.filter(r => nameMatches(q, r));
+  const regionOnly = named.length === 0 && places.some(r => stateMatches(q, r));
+  const kept = named.length ? named : regionOnly ? [] : places;
+
+  const list = kept.map(r => {
     const a = r.address || {};
     const nd = r.namedetails || {};
     const name =
@@ -269,6 +307,8 @@ async function searchNominatim(query) {
       lon: parseFloat(r.lon),
     };
   });
+  list.skipped = data.length - places.length + (regionOnly ? 1 : 0);
+  return list;
 }
 
 async function searchOpenMeteo(query) {
@@ -279,15 +319,21 @@ async function searchOpenMeteo(query) {
   if (!resp.ok) throw new Error("open-meteo geocoding failed");
   const data = await resp.json();
 
-  return (data.results || [])
-    .filter(r => !r.country_code || r.country_code === "UA")
-    .filter(r => !r.feature_code || r.feature_code.startsWith("PPL"))
-    .map(r => ({
-      name: toLatin(r.name),
-      label: uniqueJoin([r.name, r.admin2, r.admin1]),
-      lat: r.latitude,
-      lon: r.longitude,
-    }));
+  const ukrainian = (data.results || []).filter(
+    r => !r.country_code || r.country_code === "UA"
+  );
+  const places = ukrainian.filter(
+    r => !r.feature_code || r.feature_code.startsWith("PPL")
+  );
+
+  const list = places.map(r => ({
+    name: toLatin(r.name),
+    label: uniqueJoin([r.name, r.admin2, r.admin1]),
+    lat: r.latitude,
+    lon: r.longitude,
+  }));
+  list.skipped = ukrainian.length - places.length;
+  return list;
 }
 
 async function runPrediction(lat, lon, placeName, recenter) {
@@ -477,8 +523,12 @@ async function handlePlaceSearch() {
       meteo.status === "fulfilled" ? meteo.value : []
     );
 
+    const skipped =
+      (osm.status === "fulfilled" ? osm.value.skipped || 0 : 0) +
+      (meteo.status === "fulfilled" ? meteo.value.skipped || 0 : 0);
+
     if (results.length === 0) {
-      showError(t("place_not_found"));
+      showError(t(skipped > 0 ? "place_region_hint" : "place_not_found"));
     } else if (results.length === 1) {
       choosePlace(results[0]);
     } else {
