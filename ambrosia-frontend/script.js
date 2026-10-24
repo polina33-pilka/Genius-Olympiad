@@ -2,7 +2,7 @@ const API_BASE_URL = "https://genius-olympiad.onrender.com";
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org";
 const OPEN_METEO_GEO_URL = "https://geocoding-api.open-meteo.com/v1/search";
 
-const COLORS = { low: "#2e7d32", medium: "#f59e0b", high: "#dc2626" };
+const COLORS = { low: "#4caf50", medium: "#ff9800", high: "#e53935" };
 
 const FOREIGN_COUNTRIES = ["ro", "md", "pl", "sk", "hu", "by"];
 
@@ -69,7 +69,7 @@ function initMap() {
           fillColor: COLORS[cat] || "#999",
           color: COLORS[cat] || "#999",
           weight: 1,
-          fillOpacity: 0.75,
+          fillOpacity: 0.7,
           interactive: false,
         }).addTo(map);
       });
@@ -88,9 +88,9 @@ function placeMarker(lat, lon, recenter) {
   } else {
     selectedMarker = L.circleMarker([lat, lon], {
       radius: 9,
-      color: "#132e21",
+      color: "#0d47a1",
       weight: 3,
-      fillColor: "#2e7d32",
+      fillColor: "#2196f3",
       fillOpacity: 0.9,
     }).addTo(map);
   }
