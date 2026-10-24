@@ -106,7 +106,10 @@ def predict():
         lat = float(body["lat"])
         lon = float(body["lon"])
     except (KeyError, TypeError, ValueError):
-        return jsonify({"error": "Потрібні числові поля 'lat' та 'lon'."}), 400
+        return jsonify({
+            "error": "Потрібні числові поля 'lat' та 'lon'.",
+            "code": "invalid_coords",
+        }), 400
 
     lat10 = int(round(lat * 10))
     lon10 = int(round(lon * 10))
@@ -115,13 +118,17 @@ def predict():
     if land is None:
         return jsonify({
             "error": "Для цієї точки немає даних про землекористування "
-                     "(море або місце поза територією, яку покриває модель)."
+                     "(море або місце поза територією, яку покриває модель).",
+            "code": "no_land_data",
         }), 422
 
     try:
         climate = fetch_climate(round(lat10 / 10, 1), round(lon10 / 10, 1))
     except Exception as e:
-        return jsonify({"error": f"Не вдалось отримати кліматичні дані: {e}"}), 502
+        return jsonify({
+            "error": f"Не вдалось отримати кліматичні дані: {e}",
+            "code": "climate_failed",
+        }), 502
 
     row = {**climate, "cropland": land[0], "built": land[1]}
     X = pd.DataFrame([row], columns=FEATURES)
@@ -139,19 +146,24 @@ def predict():
     })
 
 
-def num(value, digits=1):
+def dec(value, lang):
+    text = str(value)
+    return text if lang == "en" else text.replace(".", ",")
+
+
+def num(value, digits=1, unknown="невідомо"):
     try:
         v = round(float(value), digits)
         return int(v) if digits == 0 else v
     except (TypeError, ValueError):
-        return "невідомо"
+        return unknown
 
 
-def pct(value):
+def pct(value, unknown="невідомо"):
     try:
         return int(round(float(value) * 100))
     except (TypeError, ValueError):
-        return "невідомо"
+        return unknown
 
 
 def to_float(value):
@@ -166,12 +178,12 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
     rp = to_float(risk_percent)
     pc = to_float(percentile)
     if rp is None or pc is None:
-        return ("Пояснення від ШІ зараз недоступне. Індекс придатності — відносна оцінка того, "
-                "наскільки умови схожі на місця, де фіксували амброзію; це не підтверджена "
-                "наявність рослини." if uk else
-                "The AI explanation is unavailable right now. The suitability index is a relative "
-                "estimate of how similar conditions are to places where ragweed has been recorded; "
-                "it does not confirm that the plant is present.")
+        return ("Пояснення від ШІ зараз не вдалося отримати. Індекс придатності є відносною "
+                "оцінкою того, наскільки умови схожі на місця, де фіксували амброзію. "
+                "Це не підтверджена наявність рослини." if uk else
+                "The AI explanation could not be obtained right now. The suitability index is a "
+                "relative estimate of how similar conditions are to places where ragweed has been "
+                "recorded. It does not confirm that the plant is present.")
     pc = int(round(pc))
     built = to_float((land or {}).get("built"))
     cropland = to_float((land or {}).get("cropland"))
@@ -181,31 +193,24 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
     if uk:
         level = {"low": "нижча", "medium": "середня", "high": "вища"}.get(category, "невизначена")
         intro = f"Для місця «{place_name}» " if place_name else "Для цієї точки "
-        parts = [intro + f"індекс придатності становить {rp:.1f}% (категорія: {level}), "
-                          f"тобто більше, ніж на {pc}% території України."]
+        parts = [intro + f"індекс придатності становить {dec(f'{rp:.1f}', 'uk')}% (категорія: {level}), "
+                          f"тобто вище, ніж на {pc}% території України."]
 
         drivers = []
         if built is not None and built >= 0.15:
             drivers.append("значна частка забудови")
         if cropland is not None and cropland >= 0.4:
-            drivers.append("значна частка пашні")
+            drivers.append("значна частка ріллі")
         if drivers:
             parts.append("В околі є " + " і ".join(drivers) +
                          ", а такі порушені землі амброзія заселяє найлегше.")
         else:
-            parts.append("Частка пашні та забудови в околі невелика.")
+            parts.append("Частка ріллі та забудови в околі невелика.")
         if temp is not None and hum is not None:
-            parts.append(f"Середня температура за сезон травень-вересень — {temp:.1f} °C, "
-                         f"вологість — {hum:.0f}%.")
+            parts.append(f"Середня температура за сезон травень-вересень становить "
+                         f"{dec(f'{temp:.1f}', 'uk')} °C, вологість {hum:.0f}%.")
         parts.append("Це орієнтовна оцінка схожості умов на місця, де фіксували амброзію, "
                      "а не підтверджена наявність рослини.")
-        if category == "low":
-            parts.append("Поодинокі рослини можливі й тут: помічену амброзію варто "
-                         "видаляти з корінням до цвітіння.")
-        else:
-            parts.append("Алергікам у період цвітіння (серпень-вересень) варто обмежувати "
-                         "перебування на вулиці в сухі вітряні дні, а помічену рослину "
-                         "видаляти з корінням до утворення насіння.")
         return " ".join(parts)
 
     level = {"low": "lower", "medium": "medium", "high": "higher"}.get(category, "undetermined")
@@ -226,62 +231,96 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
         parts.append(f"The mean May-September temperature is {temp:.1f} °C and humidity is {hum:.0f}%.")
     parts.append("This is a rough estimate of how similar conditions are to places where "
                  "ragweed has been recorded, not confirmation that the plant is present.")
-    if category == "low":
-        parts.append("Single plants are still possible here: pull any ragweed you notice, "
-                     "roots included, before it flows.")
-    else:
-        parts.append("People with allergies should limit time outdoors on dry, windy days "
-                     "during flowering (August-September), and any ragweed you find should "
-                     "be pulled out with its roots before it sets seed.")
     return " ".join(parts)
+
+
+def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category, climate, land):
+    if lang == "en":
+        place_part = f", place: {place_name}" if place_name else ""
+        cat_label = {"low": "lower", "medium": "medium", "high": "higher"}.get(category, "unknown")
+        crop_pct = pct(land.get("cropland"), "unknown")
+        built_pct = pct(land.get("built"), "unknown")
+        return (
+            "Respond in English only.\n\n"
+            "You are an assistant on an ecology website about common ragweed "
+            "(Ambrosia artemisiifolia), an invasive plant, in Ukraine.\n"
+            "A machine learning model estimated how similar the conditions in this area are to "
+            f"places where ragweed has already been recorded (coordinates {lat}, {lon}{place_part}). "
+            "This is a relative suitability index, not the probability that ragweed grows here.\n"
+            f"- Index: {risk_percent}% (higher than {percentile}% of Ukraine's territory; "
+            f"category: {cat_label})\n"
+            f"- Mean temperature for the May-September season: "
+            f"{num(climate.get('temp_mean'), 1, 'unknown')} °C\n"
+            f"- Mean precipitation for the season: "
+            f"{num(climate.get('precip_sum'), 1, 'unknown')} mm/day\n"
+            f"- Mean humidity: {num(climate.get('humidity_mean'), 1, 'unknown')}%\n"
+            f"- Share of cropland nearby: {crop_pct}%\n"
+            f"- Share of built-up land nearby: {built_pct}%\n\n"
+            "Write a short explanation (3-5 sentences) for a general reader: what this result "
+            "means and which of these conditions may have influenced it. Do not give practical "
+            "advice, instructions or recommendations of any kind (about removing the plant, "
+            "treatment, medication, or what people should do). Finish with one sentence saying "
+            "that this is a rough estimate and not confirmed presence of the plant.\n\n"
+            "Never call the index a probability or a chance of ragweed appearing; it is only a "
+            "relative measure of how similar the conditions are. Keep a cautious tone: the model "
+            "has moderate accuracy, so avoid words like \"extremely\", \"ideal\" or "
+            "\"guaranteed\". Start directly with the substance, without introductory phrases "
+            "such as \"Here is the explanation\". Do not use long dashes. Use no headings, lists "
+            "or formatting, only plain text."
+        )
+
+    place_part = f", місце: {place_name}" if place_name else ""
+    cat_label = {"low": "нижча", "medium": "середня", "high": "вища"}.get(category, "невідома")
+    crop_pct = pct(land.get("cropland"))
+    built_pct = pct(land.get("built"))
+    return (
+        "Відповідай лише українською мовою.\n\n"
+        "Ти асистент екологічного сайту про інвазивну рослину амброзію полинолисту "
+        "(Ambrosia artemisiifolia) в Україні.\n"
+        "Модель машинного навчання оцінила, наскільки умови в цій місцевості схожі на ті, "
+        f"де амброзію вже фіксували (координати {lat}, {lon}{place_part}). "
+        "Це відносний індекс придатності, а не ймовірність того, що амброзія тут росте.\n"
+        f"- Індекс: {dec(risk_percent, 'uk')}% (вище, ніж на {percentile}% території України; "
+        f"категорія: {cat_label})\n"
+        f"- Середня температура за сезон (травень-вересень): "
+        f"{dec(num(climate.get('temp_mean')), 'uk')} °C\n"
+        f"- Середні опади за сезон: {dec(num(climate.get('precip_sum')), 'uk')} мм/день\n"
+        f"- Середня вологість: {dec(num(climate.get('humidity_mean')), 'uk')}%\n"
+        f"- Частка ріллі в околі: {crop_pct}%\n"
+        f"- Частка забудови в околі: {built_pct}%\n\n"
+        "Напиши коротке (3-5 речень) пояснення для звичайної людини: що означає такий "
+        "результат і які з цих умов могли на нього вплинути. Не давай жодних практичних "
+        "порад, інструкцій чи рекомендацій (про видалення рослини, лікування, ліки чи те, "
+        "що людям слід робити). Наприкінці одним реченням зазнач, що це орієнтовна оцінка, "
+        "а не підтверджена наявність рослини.\n\n"
+        "Ніколи не називай індекс ймовірністю чи шансом появи амброзії, це лише відносна "
+        "оцінка схожості умов. Тон обережний: модель має помірну точність, тому не вживай "
+        "слів на кшталт «надзвичайно», «ідеальні», «гарантовано». "
+        "Пиши грамотно, перевір орфографію і вживай «рілля», а не «пашня». "
+        "Десяткові числа записуй через кому. Не використовуй довгих тире. "
+        "Починай одразу з суті, без вступних фраз на кшталт «Ось пояснення». "
+        "Не використовуй заголовків, списків і форматування, лише звичайний текст."
+    )
 
 
 @app.route("/api/explain", methods=["POST"])
 def explain():
     body = request.get_json(force=True, silent=True) or {}
 
-    lang = body.get("lang", "uk")
-    lat = num(body.get("lat"), 3)
-    lon = num(body.get("lon"), 3)
-    risk_percent = num(body.get("risk_percent"))
-    percentile = num(body.get("percentile"), 0)
+    lang = "en" if body.get("lang") == "en" else "uk"
+    unknown = "unknown" if lang == "en" else "невідомо"
+    lat = num(body.get("lat"), 3, unknown)
+    lon = num(body.get("lon"), 3, unknown)
+    risk_percent = num(body.get("risk_percent"), 1, unknown)
+    percentile = num(body.get("percentile"), 0, unknown)
     category = body.get("risk_category")
     climate = body.get("climate") or {}
     land = body.get("land") or {}
 
     place_name = " ".join(str(body.get("placeName") or "").split())[:120]
-    place_part = f", місце: {place_name}" if place_name else ""
-    cat_label = {"low": "низька", "medium": "середня", "high": "висока"}.get(category, "невідома")
 
-    crop_pct = pct(land.get("cropland"))
-    built_pct = pct(land.get("built"))
-
-    lang_instruction = "Відповідай українською мовою." if lang == "uk" else "Respond in English."
-
-    prompt = (
-        f"{lang_instruction}\n\n"
-        "Ти - асистент екологічного сайту про інвазивну рослину амброзію полинолисту "
-        "(Ambrosia artemisiifolia) в Україні.\n"
-        "Модель машинного навчання оцінила, наскільки умови в цій місцевості схожі на ті, "
-        f"де амброзію вже фіксували (координати {lat}, {lon}{place_part}). "
-        "Це відносний індекс придатності, а не ймовірність того, що амброзія тут росте.\n"
-        f"- Індекс: {risk_percent}% (вище, ніж на {percentile}% території України; "
-        f"категорія: {cat_label})\n"
-        f"- Середня температура за сезон (травень-вересень): {num(climate.get('temp_mean'))} C\n"
-        f"- Середні опади за сезон: {num(climate.get('precip_sum'))} мм/день\n"
-        f"- Середня вологість: {num(climate.get('humidity_mean'))}%\n"
-        f"- Частка пашні в околі: {crop_pct}%\n"
-        f"- Частка забудови в околі: {built_pct}%\n\n"
-        "Напиши коротке (3-5 речень) пояснення для звичайної людини: що означає такий "
-        "результат, які з цих умов могли на нього вплинути і яку практичну пораду можна "
-        "дати (алергія, контроль бур'яну). Наприкінці одним реченням зазнач, що це "
-        "орієнтовна оцінка, а не підтверджена наявність рослини.\n\n"
-        "Ніколи не називай індекс ймовірністю чи шансом появи амброзії, це лише відносна оцінка схожості умов. "
-        "Тон обережний: модель має помірну точність, тому не вживай слів на кшталт "
-        "«надзвичайно», «ідеальні», «гарантовано». "
-        "Починай одразу з суті, без вступних фраз на кшталт «Ось пояснення». "
-        "Не використовуй заголовків, списків і форматування, лише звичайний текст."
-    )
+    prompt = build_prompt(lang, lat, lon, place_name, risk_percent, percentile,
+                          category, climate, land)
 
     last_error = None if GEMINI_API_KEY else "GEMINI_API_KEY не налаштовано"
     text = None
