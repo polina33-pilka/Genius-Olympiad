@@ -8,6 +8,19 @@ const FOREIGN_COUNTRIES = ["ro", "md", "pl", "sk", "hu", "by", "ru"];
 
 const WAKE_HINT_MS = 5000;
 
+const REGION_NAMES = [
+  "вінницька", "волинська", "луганська", "дніпропетровська", "донецька",
+  "житомирська", "закарпатська", "запорізька", "івано-франківська", "київська",
+  "кіровоградська", "львівська", "миколаївська", "одеська", "полтавська",
+  "рівненська", "сумська", "тернопільська", "харківська", "херсонська",
+  "хмельницька", "черкаська", "чернігівська", "чернівецька",
+  "автономна республіка крим",
+  "вінниччина", "луганщина", "донеччина", "житомирщина", "закарпаття",
+  "київщина", "кіровоградщина", "львівщина", "миколаївщина", "одещина",
+  "полтавщина", "рівненщина", "сумщина", "тернопільщина", "харківщина",
+  "херсонщина", "хмельниччина", "черкащина", "чернігівщина", "буковина",
+];
+
 const REGION_WORD = /област|(^|\s)обл\.?(\s|$)|oblast|region|province/i;
 
 const MAP_BOUNDS = [[43.0, 20.5], [53.5, 42.0]];
@@ -258,9 +271,18 @@ function normalizeText(text) {
   return String(text || "")
     .toLowerCase()
     .replace(/['’ʼ`]/g, "")
-    .replace(/[.,]/g, " ")
+    .replace(/[.,\-–]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isRegionQuery(query) {
+  if (REGION_WORD.test(query)) return true;
+  const q = normalizeText(query);
+  return REGION_NAMES.some(
+    n => normalizeText(n) === q ||
+      (currentLang === "en" && normalizeText(toLatin(n)) === q)
+  );
 }
 
 function nameMatches(q, r) {
@@ -500,7 +522,7 @@ async function handlePlaceSearch() {
     return;
   }
 
-  if (REGION_WORD.test(query)) {
+  if (isRegionQuery(query)) {
     showError(t("place_region_hint"));
     return;
   }
