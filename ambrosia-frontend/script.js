@@ -8,7 +8,27 @@ const FOREIGN_COUNTRIES = ["ro", "md", "pl", "sk", "hu", "by", "ru"];
 
 const WAKE_HINT_MS = 5000;
 
-const MAP_BOUNDS = [[42.5, 20.0], [54.0, 42.5]];
+const MAP_BOUNDS = [[43.0, 20.5], [53.5, 42.0]];
+const UKRAINE_VIEW = [[44.3, 22.1], [52.4, 40.3]];
+
+const UKRAINE_POLYGON = [
+  [51.92, 23.61], [51.50, 23.60], [51.17, 23.82], [50.85, 24.05], [50.45, 24.25],
+  [50.25, 23.60], [49.78, 22.88], [49.43, 22.65], [49.08, 22.56], [48.57, 22.15],
+  [48.40, 22.15], [48.10, 22.75], [47.95, 22.88], [47.95, 23.65], [47.95, 24.20],
+  [47.75, 24.90], [47.95, 26.07], [48.25, 26.62], [48.40, 27.40], [48.20, 28.30],
+  [47.80, 29.20], [47.30, 29.55], [46.90, 29.95], [46.38, 30.10], [46.10, 29.00],
+  [45.65, 28.35], [45.47, 28.21], [45.40, 28.80], [45.45, 29.30], [45.20, 29.75],
+  [45.60, 30.40], [46.45, 30.75], [46.55, 31.60], [46.30, 32.00], [46.10, 33.00],
+  [45.80, 33.60], [45.35, 32.50], [44.60, 33.40], [44.39, 33.74], [44.50, 34.20],
+  [45.00, 35.40], [45.35, 36.60], [45.50, 35.50], [46.00, 35.20], [46.20, 34.80],
+  [46.75, 36.80], [47.10, 37.55], [47.10, 38.20], [47.50, 38.50], [47.90, 39.10],
+  [48.30, 40.00], [48.80, 40.15], [49.40, 40.20], [49.90, 40.10], [50.05, 39.20],
+  [50.35, 38.00], [50.40, 37.10], [50.45, 36.30], [50.60, 35.70], [51.00, 35.40],
+  [51.45, 34.40], [51.70, 34.10], [52.00, 34.10], [52.37, 33.50], [52.10, 32.50],
+  [52.10, 31.75], [51.90, 31.30], [51.50, 30.75], [51.60, 30.00], [51.65, 29.40],
+  [51.50, 28.70], [51.60, 28.00], [51.90, 27.50], [51.90, 26.50], [51.65, 25.80],
+  [51.60, 24.50], [51.90, 24.00],
+];
 
 let map;
 let selectedMarker = null;
@@ -47,14 +67,17 @@ function uniqueJoin(parts) {
 }
 
 function isInsideUkraine(lat, lon) {
-  if (lat < 44.3 || lat > 52.5 || lon < 21.8 || lon > 40.4) return false;
-  if (lat > 51.5 && (lon < 30.5 || lon > 33.5)) return false;
-  if (lat > 52.1) return false;
-  if (lat > 50.2 && lon > 38.3) return false;
-  if (lat > 49.2 && lat <= 50.2 && lon > 40.2) return false;
-  if (lat <= 49.2 && lat > 47.5 && lon > 40.3) return false;
-  if (lat <= 47.5 && lon > 37.5) return false;
-  return true;
+  let inside = false;
+  const n = UKRAINE_POLYGON.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const [yi, xi] = UKRAINE_POLYGON[i];
+    const [yj, xj] = UKRAINE_POLYGON[j];
+    const crosses =
+      (yi > lat) !== (yj > lat) &&
+      lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
 }
 
 function initMap() {
@@ -62,7 +85,8 @@ function initMap() {
     minZoom: 5,
     maxBounds: MAP_BOUNDS,
     maxBoundsViscosity: 0.8,
-  }).setView([48.5, 31.5], 5.3);
+  });
+  map.fitBounds(UKRAINE_VIEW);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors",
