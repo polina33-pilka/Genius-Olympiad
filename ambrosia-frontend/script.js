@@ -10,6 +10,14 @@ const WAKE_HINT_MS = 5000;
 
 const MAP_BOUNDS = [[42.5, 20.0], [54.0, 42.5]];
 
+const UKRAINE_POLYGON = [
+  [52.3, 31.3], [52.1, 32.8], [52.3, 33.5], [51.5, 34.4], [51.2, 38.5], 
+  [49.6, 40.2], [47.3, 39.7], [46.1, 36.6], [45.2, 36.6], [44.4, 34.5], 
+  [45.3, 32.5], [45.6, 29.6], [48.1, 28.2], [48.3, 26.6], [48.0, 22.6], 
+  [48.6, 22.2], [49.1, 22.6], [50.5, 23.8], [51.5, 23.6], [51.8, 24.1], 
+  [51.5, 30.8]
+];
+
 let map;
 let selectedMarker = null;
 let lastResult = null;
@@ -47,13 +55,16 @@ function uniqueJoin(parts) {
 }
 
 function isInsideUkraine(lat, lon) {
-  if (lat < 44.3 || lat > 52.4 || lon < 22.1 || lon > 40.3) return false;
-  if (lat > 51.5 && (lon < 30.8 || lon > 33.3)) return false;
-  if (lat > 52.0) return false;
-  if (lon > 38.5 && lat > 49.5) return false;
-  if (lon > 37.5 && lat > 50.5) return false;
-  if (lon < 22.5 && lat > 49.6) return false;
-  return true;
+  let inside = false;
+  for (let i = 0, j = UKRAINE_POLYGON.length - 1; i < UKRAINE_POLYGON.length; j = i++) {
+    const xi = UKRAINE_POLYGON[i][0], yi = UKRAINE_POLYGON[i][1];
+    const xj = UKRAINE_POLYGON[j][0], yj = UKRAINE_POLYGON[j][1];
+    
+    const intersect = ((yi > lon) !== (yj > lon)) &&
+        (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }
 
 function initMap() {
