@@ -59,6 +59,8 @@ let map;
 let selectedMarker = null;
 let lastResult = null;
 let requestCounter = 0;
+let explainCache = {};
+let explainRequestId = 0;
 
 function t(key) {
   return TRANSLATIONS[currentLang][key];
@@ -373,6 +375,8 @@ async function runPrediction(lat, lon, placeName, recenter) {
   explainText.classList.add("hidden");
   explainText.textContent = "";
   lastResult = null;
+  explainCache = {};
+  explainRequestId++;
 
   if (!placeName) document.getElementById("place-input").value = "";
   placeMarker(lat, lon, recenter);
@@ -576,46 +580,83 @@ function handleManualPredict() {
   runPrediction(lat, lon, null, true);
 }
 
+function renderExplanation(data) {
+  const explainText = document.getElementById("explain-text");
+  explainText.classList.remove("hidden");
+  explainText.textContent = "";
+
+  const body = document.createElement("div");
+  body.textContent = data.explanation;
+  const note = document.createElement("div");
+  note.style.fontSize = "0.85rem";
+  note.style.color = "#555";
+  note.style.marginTop = "0.6rem";
+  note.textContent = data.fallback ? t("explain_fallback_note") : t("explain_ai_note");
+  explainText.append(body, note);
+}
+
 async function handleExplain() {
   if (!lastResult) return;
   const explainText = document.getElementById("explain-text");
+  const lang = currentLang;
+  const snapshot = lastResult;
 
+  const cached = explainCache[lang];
+  if (cached) {
+    renderExplanation(cached);
+    return;
+  }
+
+  const myId = ++explainRequestId;
   explainText.classList.remove("hidden");
   explainText.textContent = t("loading");
 
   let done = false;
   const wakeTimer = setTimeout(() => {
-    if (!done) explainText.textContent = t("waking_explain");
+    if (!done && myId === explainRequestId) explainText.textContent = t("waking_explain");
   }, WAKE_HINT_MS);
 
   try {
     const resp = await fetch(`${API_BASE_URL}/api/explain`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...lastResult, lang: currentLang }),
+      body: JSON.stringify({ ...snapshot, lang }),
     });
     const data = await resp.json();
     done = true;
+    if (myId !== explainRequestId || snapshot !== lastResult) return;
 
     if (!resp.ok) {
       explainText.textContent = apiErrorMessage(data);
       return;
     }
-    explainText.textContent = "";
-    const body = document.createElement("div");
-    body.textContent = data.explanation;
-    const note = document.createElement("div");
-    note.style.fontSize = "0.85rem";
-    note.style.color = "#555";
-    note.style.marginTop = "0.6rem";
-    note.textContent = data.fallback ? t("explain_fallback_note") : t("explain_ai_note");
-    explainText.append(body, note);
+    if (!data.fallback) explainCache[lang] = data;
+    renderExplanation(data);
   } catch (err) {
-    explainText.textContent = t("error_generic");
+    if (myId === explainRequestId) explainText.textContent = t("error_generic");
   } finally {
     done = true;
     clearTimeout(wakeTimer);
   }
+}
+
+async function refreshPlaceName() {
+  if (!lastResult) return;
+  const snapshot = lastResult;
+  const lang = currentLang;
+
+  const reversed = await reverseGeocode(snapshot.lat, snapshot.lon).catch(() => null);
+  if (snapshot !== lastResult || lang !== currentLang) return;
+
+  if (reversed) {
+    snapshot.placeName = reversed.label;
+    document.getElementById("place-input").value = reversed.name;
+  } else if (snapshot.placeName) {
+    snapshot.placeName = toLatin(snapshot.placeName);
+    const input = document.getElementById("place-input");
+    input.value = toLatin(input.value);
+  }
+  renderResult();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -628,8 +669,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("predict-btn").addEventListener("click", handleManualPredict);
   document.getElementById("explain-btn").addEventListener("click", handleExplain);
 
-  document.getElementById("lang-toggle").addEventListener("click", () => {
+  document.getElementById("lang-toggle").addEventListener("click", async () => {
+    hideError();
     renderResult();
     clearPlaceResults();
+    await refreshPlaceName();
+    const explainBox = document.getElementById("explain-text");
+    if (lastResult && !explainBox.classList.contains("hidden")) handleExplain();
   });
 });
