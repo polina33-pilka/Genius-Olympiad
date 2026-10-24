@@ -47,14 +47,13 @@ function uniqueJoin(parts) {
 }
 
 function isInsideUkraine(lat, lon) {
-  if (lat < 44.3 || lat > 52.5 || lon < 22.0 || lon > 40.5) return false;
-  if (lat > 52.1 && (lon < 30.5 || lon > 33.5)) return false;
-  if (lat > 52.45) return false;
-  if (lon > 38.3 && lat < 48.8) return false;
-  if (lon > 39.5 && lat < 49.8) return false;
-  if (lon > 38.5 && lat > 49.5) return false;
-  if (lon > 37.0 && lat > 50.8) return false;
-  if (lon > 34.0 && lat > 51.6) return false;
+  if (lat < 44.3 || lat > 52.5 || lon < 21.8 || lon > 40.4) return false;
+  if (lat > 51.5 && (lon < 30.5 || lon > 33.5)) return false;
+  if (lat > 52.1) return false;
+  if (lat > 50.2 && lon > 38.3) return false;
+  if (lat > 49.2 && lat <= 50.2 && lon > 40.2) return false;
+  if (lat <= 49.2 && lat > 47.5 && lon > 40.3) return false;
+  if (lat <= 47.5 && lon > 37.5) return false;
   return true;
 }
 
