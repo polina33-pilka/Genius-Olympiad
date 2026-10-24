@@ -209,6 +209,12 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
         if temp is not None and hum is not None:
             parts.append(f"Середня температура за сезон травень-вересень становить "
                          f"{dec(f'{temp:.1f}', 'uk')} °C, вологість {hum:.0f}%.")
+        if category == "low":
+            parts.append("Навіть за нижчого індексу окремі рослини можливі, тому в період "
+                         "цвітіння варто бути уважним.")
+        else:
+            parts.append("Тому в період цвітіння влітку та на початку осені варто уважніше "
+                         "стежити за появою рослини, а людям з алергією за потреби звернутися до лікаря.")
         parts.append("Це орієнтовна оцінка схожості умов на місця, де фіксували амброзію, "
                      "а не підтверджена наявність рослини.")
         return " ".join(parts)
@@ -229,6 +235,13 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
         parts.append("The share of cropland and built-up land nearby is small.")
     if temp is not None and hum is not None:
         parts.append(f"The mean May-September temperature is {temp:.1f} °C and humidity is {hum:.0f}%.")
+    if category == "low":
+        parts.append("Even with a lower index, single plants are possible, so it is worth "
+                     "staying attentive during the flowering season.")
+    else:
+        parts.append("So during the flowering season in summer and early autumn it is worth "
+                     "keeping a closer eye on the area, and people with allergies can consult "
+                     "a doctor if needed.")
     parts.append("This is a rough estimate of how similar conditions are to places where "
                  "ragweed has been recorded, not confirmation that the plant is present.")
     return " ".join(parts)
@@ -257,9 +270,7 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
             f"- Share of cropland nearby: {crop_pct}%\n"
             f"- Share of built-up land nearby: {built_pct}%\n\n"
             "Write a short explanation (3-5 sentences) for a general reader: what this result "
-            "means and which of these conditions may have influenced it. Do not give practical "
-            "advice, instructions or recommendations of any kind (about removing the plant, "
-            "treatment, medication, or what people should do). Finish with one sentence saying "
+            "means and which of these conditions may have influenced it. You may add one short, gentle and general piece of advice (for example, to keep a closer eye on plants during the flowering season in summer and early autumn, and for people with allergies to consult a doctor about health questions). Do not give specific instructions about removing the plant, chemical treatment, medical treatment or medication. Finish with one sentence saying "
             "that this is a rough estimate and not confirmed presence of the plant.\n\n"
             "Never call the index a probability or a chance of ragweed appearing; it is only a "
             "relative measure of how similar the conditions are. Keep a cautious tone: the model "
@@ -289,9 +300,7 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         f"- Частка ріллі в околі: {crop_pct}%\n"
         f"- Частка забудови в околі: {built_pct}%\n\n"
         "Напиши коротке (3-5 речень) пояснення для звичайної людини: що означає такий "
-        "результат і які з цих умов могли на нього вплинути. Не давай жодних практичних "
-        "порад, інструкцій чи рекомендацій (про видалення рослини, лікування, ліки чи те, "
-        "що людям слід робити). Наприкінці одним реченням зазнач, що це орієнтовна оцінка, "
+        "результат і які з цих умов могли на нього вплинути. Можеш додати одну коротку, м'яку й загальну пораду (наприклад, уважніше стежити за рослинами в період цвітіння влітку та на початку осені, а з питань здоров'я чи алергії звернутися до лікаря). Не давай конкретних інструкцій щодо видалення рослини, хімічної обробки, лікування чи ліків. Наприкінці одним реченням зазнач, що це орієнтовна оцінка, "
         "а не підтверджена наявність рослини.\n\n"
         "Ніколи не називай індекс ймовірністю чи шансом появи амброзії, це лише відносна "
         "оцінка схожості умов. Тон обережний: модель має помірну точність, тому не вживай "
