@@ -8,6 +8,8 @@ const FOREIGN_COUNTRIES = ["ro", "md", "pl", "sk", "hu", "by", "ru"];
 
 const WAKE_HINT_MS = 5000;
 
+const REGION_WORD = /област|(^|\s)обл\.?(\s|$)|oblast|region|province/i;
+
 const MAP_BOUNDS = [[43.0, 20.5], [53.5, 42.0]];
 const UKRAINE_VIEW = [[44.2, 22.0], [52.5, 40.4]];
 const BORDER_TOLERANCE = 0.07;
@@ -279,6 +281,7 @@ async function searchOpenMeteo(query) {
 
   return (data.results || [])
     .filter(r => !r.country_code || r.country_code === "UA")
+    .filter(r => !r.feature_code || r.feature_code.startsWith("PPL"))
     .map(r => ({
       name: toLatin(r.name),
       label: uniqueJoin([r.name, r.admin2, r.admin1]),
@@ -448,6 +451,11 @@ async function handlePlaceSearch() {
   const query = document.getElementById("place-input").value.trim();
   if (!query) {
     showError(t("place_empty"));
+    return;
+  }
+
+  if (REGION_WORD.test(query)) {
+    showError(t("place_region_hint"));
     return;
   }
 
