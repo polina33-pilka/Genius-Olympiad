@@ -108,6 +108,8 @@ function initMap() {
     maxBoundsViscosity: 0.8,
   });
   map.fitBounds(UKRAINE_VIEW, { padding: [8, 8] });
+  map.createPane("selectedPane");
+  map.getPane("selectedPane").style.zIndex = 650;
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors",
@@ -144,6 +146,7 @@ function placeMarker(lat, lon, recenter) {
     selectedMarker.setLatLng([lat, lon]);
   } else {
     selectedMarker = L.circleMarker([lat, lon], {
+      pane: "selectedPane",
       radius: 9,
       color: "#0d47a1",
       weight: 3,
