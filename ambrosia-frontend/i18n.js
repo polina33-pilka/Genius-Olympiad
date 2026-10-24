@@ -53,6 +53,9 @@ const TRANSLATIONS = {
     error_fill_fields: "Будь ласка, введи коректні координати.",
     error_generic: "Сталася помилка. Спробуй ще раз.",
     error_outside_ukraine: "Ця точка поза Україною. Модель навчена на даних України, тому для таких місць результат не розраховується.",
+    waking: "Це може тривати до хвилини: сервер прокидається після простою або ШІ готує відповідь...",
+    explain_fallback_note: "(Пояснення від ШІ недоступне, показано автоматичний шаблонний текст.)",
+    result_climate: "Клімат (травень-вересень): {t} °C, опади {p} мм/день, вологість {h}%",
     loading: "Розраховуємо...",
     searching: "Шукаємо..."
   },
@@ -110,6 +113,9 @@ const TRANSLATIONS = {
     error_fill_fields: "Please enter valid coordinates.",
     error_generic: "Something went wrong. Please try again.",
     error_outside_ukraine: "This point is outside Ukraine. The model was trained on Ukrainian data, so no result is calculated for such places.",
+    waking: "This can take up to a minute: the server is waking up after inactivity or the AI is preparing an answer...",
+    explain_fallback_note: "(The AI explanation is unavailable, an automatic template text is shown.)",
+    result_climate: "Climate (May-September): {t} °C, precipitation {p} mm/day, humidity {h}%",
     loading: "Calculating...",
     searching: "Searching..."
   }
