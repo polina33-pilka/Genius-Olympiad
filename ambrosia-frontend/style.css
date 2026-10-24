@@ -200,3 +200,12 @@ body {
 }
 
 .result-box div + div { margin-top: 0.3rem; }
+
+.topbar {
+  z-index: 2000;
+}
+
+#leaflet-map {
+  position: relative;
+  z-index: 0;
+}
