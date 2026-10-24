@@ -434,7 +434,7 @@ async function handleExplain() {
 
   let done = false;
   const wakeTimer = setTimeout(() => {
-    if (!done) explainText.textContent = t("waking");
+    if (!done) explainText.textContent = t("waking_explain");
   }, WAKE_HINT_MS);
 
   try {
