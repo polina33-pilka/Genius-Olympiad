@@ -87,8 +87,54 @@ function clearPlaceResults() {
   list.classList.add("hidden");
 }
 
+const TRANSLIT = {
+  а: "a", б: "b", в: "v", г: "h", ґ: "g", д: "d", е: "e", є: ["ye", "ie"],
+  ж: "zh", з: "z", и: "y", і: "i", ї: ["yi", "i"], й: ["y", "i"], к: "k",
+  л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u",
+  ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ь: "",
+  ю: ["yu", "iu"], я: ["ya", "ia"],
+};
+
+const WORD_MAP = {
+  "міська": "Urban",
+  "селищна": "Settlement",
+  "сільська": "Rural",
+  "громада": "Hromada",
+  "район": "Raion",
+  "область": "Oblast",
+};
+
+function translitWord(word) {
+  const mapped = WORD_MAP[word.toLowerCase()];
+  if (mapped) return mapped;
+
+  let out = "";
+  for (let i = 0; i < word.length; i++) {
+    const ch = word[i];
+    const lower = ch.toLowerCase();
+    if (lower === "'" || lower === "’" || lower === "ʼ") continue;
+
+    let rep = TRANSLIT[lower];
+    if (rep === undefined) {
+      out += ch;
+      continue;
+    }
+    const start = i === 0 || word[i - 1] === "-";
+    if (Array.isArray(rep)) rep = start ? rep[0] : rep[1];
+    if (lower === "г" && i > 0 && word[i - 1].toLowerCase() === "з") rep = "gh";
+    if (ch !== lower && rep) rep = rep[0].toUpperCase() + rep.slice(1);
+    out += rep;
+  }
+  return out;
+}
+
+function toLatin(text) {
+  if (currentLang !== "en" || !text || !/[\u0400-\u04FF]/.test(text)) return text;
+  return text.replace(/[\u0400-\u04FF][\u0400-\u04FF'’ʼ-]*/g, translitWord);
+}
+
 function uniqueJoin(parts) {
-  const clean = parts.filter(Boolean);
+  const clean = parts.filter(Boolean).map(toLatin);
   return clean.filter((p, i) => clean.indexOf(p) === i).join(", ");
 }
 
@@ -191,7 +237,7 @@ async function reverseGeocode(lat, lon) {
   if (!name) return null;
 
   return {
-    name,
+    name: toLatin(name),
     label: uniqueJoin([name, a.county, a.state]),
     country: (a.country_code || "").toLowerCase(),
   };
@@ -201,18 +247,21 @@ async function searchNominatim(query) {
   const url =
     `${NOMINATIM_URL}/search?q=${encodeURIComponent(query)}` +
     `&countrycodes=ua&featureType=settlement&format=jsonv2` +
-    `&addressdetails=1&limit=10&accept-language=${currentLang}`;
+    `&addressdetails=1&namedetails=1&limit=10&accept-language=${currentLang}`;
   const resp = await fetch(url);
   if (!resp.ok) throw new Error("nominatim failed");
   const data = await resp.json();
 
   return data.map(r => {
     const a = r.address || {};
+    const nd = r.namedetails || {};
     const name =
-      r.name || a.city || a.town || a.village || a.hamlet ||
+      nd[`name:${currentLang}`] ||
+      a.city || a.town || a.village || a.hamlet ||
+      r.name ||
       (r.display_name || "").split(",")[0];
     return {
-      name,
+      name: toLatin(name),
       label: uniqueJoin([name, a.county || a.municipality || a.district, a.state]),
       lat: parseFloat(r.lat),
       lon: parseFloat(r.lon),
@@ -231,7 +280,7 @@ async function searchOpenMeteo(query) {
   return (data.results || [])
     .filter(r => !r.country_code || r.country_code === "UA")
     .map(r => ({
-      name: r.name,
+      name: toLatin(r.name),
       label: uniqueJoin([r.name, r.admin2, r.admin1]),
       lat: r.latitude,
       lon: r.longitude,
@@ -376,12 +425,18 @@ function showPlaceList(results) {
 }
 
 function mergeResults(primary, secondary) {
-  const merged = [...primary];
-  secondary.forEach(s => {
-    const exists = merged.some(
-      p => Math.abs(p.lat - s.lat) < 0.05 && Math.abs(p.lon - s.lon) < 0.05
+  const merged = [];
+  const hasLabel = r =>
+    merged.some(p => p.label.toLowerCase() === r.label.toLowerCase());
+
+  primary.forEach(r => {
+    if (!hasLabel(r)) merged.push(r);
+  });
+  secondary.forEach(r => {
+    const near = merged.some(
+      p => Math.abs(p.lat - r.lat) < 0.05 && Math.abs(p.lon - r.lon) < 0.05
     );
-    if (!exists) merged.push(s);
+    if (!near && !hasLabel(r)) merged.push(r);
   });
   return merged.slice(0, 12);
 }
