@@ -54,7 +54,8 @@ const TRANSLATIONS = {
     error_generic: "Сталася помилка. Спробуй ще раз.",
     error_outside_ukraine: "Ця точка поза Україною. Модель навчена на даних України, тому для таких місць результат не розраховується.",
     waking: "Сервер прокидається після простою, це може тривати до хвилини. Будь ласка, зачекайте.",
-    explain_fallback_note: "(Пояснення від ШІ недоступне, показано автоматичний шаблонний текст.)",
+    waking_explain: "Сервіс ШІ зараз перевантажений, тому відповідь може йти до хвилини. Будь ласка, зачекайте.",
+    explain_fallback_note: "(Через велике навантаження на безкоштовний сервіс ШІ показано автоматичне пояснення за шаблоном.)",
     result_climate: "Клімат (травень-вересень): {t} °C, опади {p} мм/день, вологість {h}%",
     loading: "Розраховуємо...",
     searching: "Шукаємо..."
@@ -114,7 +115,8 @@ const TRANSLATIONS = {
     error_generic: "Something went wrong. Please try again.",
     error_outside_ukraine: "This point is outside Ukraine. The model was trained on Ukrainian data, so no result is calculated for such places.",
     waking: "The server is waking up after inactivity. This can take up to a minute, please wait.",
-    explain_fallback_note: "(The AI explanation is unavailable, an automatic template text is shown.)",
+    waking_explain: "The AI service is currently overloaded, so the answer may take up to a minute. Please wait.",
+    explain_fallback_note: "(Due to high load on the free AI service, an automatic template explanation is shown.)",
     result_climate: "Climate (May-September): {t} °C, precipitation {p} mm/day, humidity {h}%",
     loading: "Calculating...",
     searching: "Searching..."
