@@ -54,6 +54,17 @@ function formatNumber(value) {
   return currentLang === "uk" ? text.replace(".", ",") : text;
 }
 
+const ERROR_KEYS = {
+  invalid_coords: "error_fill_fields",
+  no_land_data: "error_no_land",
+  climate_failed: "error_climate",
+};
+
+function apiErrorMessage(data) {
+  const key = data && data.code ? ERROR_KEYS[data.code] : null;
+  return t(key || "error_generic");
+}
+
 function categoryLabel(cat) {
   if (cat === "low") return t("result_category_low");
   if (cat === "medium") return t("result_category_medium");
@@ -271,7 +282,7 @@ async function runPrediction(lat, lon, placeName, recenter) {
     if (myId !== requestCounter) return;
 
     if (!resp.ok) {
-      showError(data.error || t("error_generic"));
+      showError(apiErrorMessage(data));
       resultBox.classList.add("hidden");
       return;
     }
@@ -452,7 +463,7 @@ async function handleExplain() {
     done = true;
 
     if (!resp.ok) {
-      explainText.textContent = data.error || t("error_generic");
+      explainText.textContent = apiErrorMessage(data);
       return;
     }
     explainText.textContent =
