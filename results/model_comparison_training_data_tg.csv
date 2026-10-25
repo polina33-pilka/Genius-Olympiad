@@ -1,1 +1,5 @@
-
+model,features,AUC random CV,AUC spatial CV,spatial std
+Logistic Regression,climate,0.566,0.547,0.059
+Random Forest,climate,0.611,0.586,0.043
+Gradient Boosting,climate,0.606,0.563,0.037
+Random Forest (діагностика),тільки lat/lon,0.678,0.609,
