@@ -6,8 +6,8 @@
     "cropland",
     "built"
   ],
-  "threshold_medium": 0.4104451631186836,
-  "threshold_high": 0.5912624806038418,
+  "threshold_medium": 0.4234221444502863,
+  "threshold_high": 0.5855454531028176,
   "cv_auc_regions": 0.696,
   "sklearn_version": "1.5.1"
 }
