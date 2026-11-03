@@ -162,6 +162,7 @@ def predict():
         "risk_category": categorize(risk),
         "percentile": percentile_on_map(risk_percent),
         "climate": climate,
+        "climate_source": source,
         "land": {"cropland": round(land[0], 3), "built": round(land[1], 3)},
     })
 
