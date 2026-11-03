@@ -46,6 +46,22 @@ LAND = {
     for r in _land.itertuples()
 }
 
+GRID_CLIMATE = pd.read_csv(os.path.join(DATA_DIR, "full_grid_climate_data_v3.csv")).dropna()
+GRID_LAT = GRID_CLIMATE["lat_grid"].to_numpy()
+GRID_LON = GRID_CLIMATE["lon_grid"].to_numpy()
+
+
+def nearest_grid_climate(lat, lon, max_deg=0.3):
+    d = np.hypot(GRID_LAT - lat, (GRID_LON - lon) * np.cos(np.radians(lat)))
+    i = int(d.argmin())
+    if d[i] > max_deg:
+        return None
+    row = GRID_CLIMATE.iloc[i]
+    return {
+        "temp_mean": float(row["temp_mean"]),
+        "precip_sum": float(row["precip_sum"]),
+        "humidity_mean": float(row["humidity_mean"]),
+    }
 
 def categorize(p):
     if p < T_MEDIUM:
