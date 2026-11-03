@@ -63,6 +63,7 @@ def nearest_grid_climate(lat, lon, max_deg=0.3):
         "humidity_mean": float(row["humidity_mean"]),
     }
 
+
 def categorize(p):
     if p < T_MEDIUM:
         return "low"
