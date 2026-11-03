@@ -354,6 +354,28 @@ def explain():
     prompt = build_prompt(lang, lat, lon, place_name, risk_percent, percentile,
                           category, climate, land)
 
+    if category in ("medium", "high"):
+        if lang == "en":
+            prompt += (
+                "\n\nFor people with allergies, add one or two cautious, general tips for the "
+                "ragweed flowering season (August-September): check local pollen forecasts, "
+                "consider limiting time outdoors on dry, windy days when pollen levels may be "
+                "higher, keep windows closed at such times, and change clothes and wash hair "
+                "after being outside. Say that questions about symptoms and treatment should be "
+                "discussed with a doctor or pharmacist. Do not name specific medications and do "
+                "not promise that these steps prevent a reaction."
+            )
+        else:
+            prompt += (
+                "\n\nДля людей з алергією додай одну-дві обережні загальні поради на період "
+                "цвітіння амброзії (серпень-вересень): стежити за місцевими прогнозами пилку, "
+                "за можливості менше бувати надворі в суху вітряну погоду, коли пилку може "
+                "бути більше, у такі дні тримати вікна зачиненими, після прогулянки змінити "
+                "одяг і вимити волосся. Зазнач, що питання про симптоми й лікування варто "
+                "обговорити з лікарем або фармацевтом. Не називай конкретних ліків і не "
+                "обіцяй, що ці кроки запобігають реакції."
+            )
+
     last_error = None if GEMINI_API_KEY else "GEMINI_API_KEY не налаштовано"
     text = None
     for attempt in range(GEMINI_ATTEMPTS if GEMINI_API_KEY else 0):
@@ -382,11 +404,19 @@ def explain():
             time.sleep(2 * (attempt + 1))
 
     if text is None:
-        return jsonify({
-            "explanation": fallback_explanation(
-                lang, place_name, risk_percent, percentile, category, climate, land),
-            "fallback": True,
-        })
+        explanation = fallback_explanation(
+            lang, place_name, risk_percent, percentile, category, climate, land)
+        if category in ("medium", "high"):
+            explanation += (
+                " During the ragweed flowering season (August-September), people with allergies "
+                "can check local pollen forecasts and talk to a doctor or pharmacist about "
+                "symptoms."
+                if lang == "en" else
+                " У період цвітіння амброзії (серпень-вересень) людям з алергією варто "
+                "стежити за місцевими прогнозами пилку та обговорити симптоми з лікарем "
+                "або фармацевтом."
+            )
+        return jsonify({"explanation": explanation, "fallback": True})
 
     return jsonify({"explanation": text})
 
