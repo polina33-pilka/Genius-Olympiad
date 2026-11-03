@@ -141,10 +141,12 @@ def predict():
     try:
         climate = fetch_climate(round(lat10 / 10, 1), round(lon10 / 10, 1))
     except Exception as e:
-        return jsonify({
-            "error": f"Не вдалось отримати кліматичні дані: {e}",
-            "code": "climate_failed",
-        }), 502
+        climate = nearest_grid_climate(lat, lon)
+        if climate is None:
+            return jsonify({
+                "error": f"Не вдалось отримати кліматичні дані: {e}",
+                "code": "climate_failed",
+            }), 502
 
     row = {**climate, "cropland": land[0], "built": land[1]}
     X = pd.DataFrame([row], columns=FEATURES)
