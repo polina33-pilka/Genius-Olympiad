@@ -594,12 +594,37 @@ function renderExplanation(data) {
 
   const body = document.createElement("div");
   body.textContent = data.explanation;
+  explainText.appendChild(body);
+
+  (data.groups || []).forEach(group => {
+    const title = document.createElement("div");
+    title.style.fontWeight = "bold";
+    title.style.marginTop = "0.8rem";
+    title.textContent = group.title;
+    const list = document.createElement("ul");
+    list.style.margin = "0.3rem 0 0 1.2rem";
+    list.style.padding = "0";
+    group.items.forEach(item => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      list.appendChild(li);
+    });
+    explainText.append(title, list);
+  });
+
+  if (data.closing) {
+    const closing = document.createElement("div");
+    closing.style.marginTop = "0.8rem";
+    closing.textContent = data.closing;
+    explainText.appendChild(closing);
+  }
+
   const note = document.createElement("div");
   note.style.fontSize = "0.85rem";
   note.style.color = "#555";
   note.style.marginTop = "0.6rem";
   note.textContent = data.fallback ? t("explain_fallback_note") : t("explain_ai_note");
-  explainText.append(body, note);
+  explainText.appendChild(note);
 }
 
 async function handleExplain() {
