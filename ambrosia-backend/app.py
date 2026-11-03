@@ -53,64 +53,33 @@ GRID_LON = GRID_CLIMATE["lon_grid"].to_numpy()
 # Фіксовані поради: однакові для всіх, не залежать від ШІ
 TIP_GROUPS = {
     "uk": [
-        {
-            "title": "Комунальним службам та ОТГ",
-            "items": [
-                "Перед цвітінням (з липня) оглядати узбіччя, пустирі, будівельні майданчики та занедбані ділянки.",
-                "Планувати скошування таких місць до початку цвітіння рослин.",
-                "Фіксувати знайдені осередки (місце й дата), щоб планувати повторні огляди.",
-            ],
-        },
-        {
-            "title": "Аграріям та фермерам",
-            "items": [
-                "З червня-липня перевіряти краї полів, перелоги та необроблені ділянки.",
-                "Не допускати цвітіння й утворення насіння на таких ділянках.",
-                "Щодо методів боротьби радитися з агрономом або місцевою службою захисту рослин.",
-            ],
-        },
-        {
-            "title": "Мешканцям та алергікам",
-            "items": [
-                "Повідомляти місцевій владі про великі зарості на занедбаних ділянках поруч із домом.",
-                "У серпні-вересні стежити за місцевими прогнозами пилку.",
-                "З питань симптомів і лікування звертатися до лікаря.",
-            ],
-        },
+        {"title": "Комунальним службам та ОТГ", "items": [
+            "Оглянути узбіччя, пустирі та будмайданчики до початку цвітіння й заплановати скошування.",
+        ]},
+        {"title": "Аграріям та землевласникам", "items": [
+            "Перевірити краї полів і перелоги та не допустити утворення насіння.",
+        ]},
+        {"title": "Мешканцям та алергікам", "items": [
+            "У серпні-вересні стежити за місцевими прогнозами пилку та повідомляти владі про великі зарості.",
+        ]},
     ],
     "en": [
-        {
-            "title": "Municipal services and local communities",
-            "items": [
-                "Before flowering (from July), inspect roadsides, vacant lots, construction sites and neglected land.",
-                "Plan mowing of such places before the plants start flowering.",
-                "Record any hotspots found (place and date) to plan repeat inspections.",
-            ],
-        },
-        {
-            "title": "Farmers and agricultural producers",
-            "items": [
-                "From June-July, check field margins, fallow land and uncultivated areas.",
-                "Do not let plants flower and set seed on such areas.",
-                "Ask an agronomist or the local plant protection service about control methods.",
-            ],
-        },
-        {
-            "title": "Residents and people with allergies",
-            "items": [
-                "Tell local authorities about large patches of weeds on neglected land near homes.",
-                "In August-September, follow local pollen forecasts.",
-                "For questions about symptoms and treatment, consult a doctor.",
-            ],
-        },
+        {"title": "Municipal services and local communities", "items": [
+            "Inspect roadsides, vacant lots and construction sites before flowering and plan mowing.",
+        ]},
+        {"title": "Farmers and landowners", "items": [
+            "Check field margins and fallow land and prevent seed formation.",
+        ]},
+        {"title": "Residents and people with allergies", "items": [
+            "In August-September follow local pollen forecasts and report large patches of weeds to the authorities.",
+        ]},
     ],
 }
 
 CLOSING = {
-    "uk": "Це орієнтовна оцінка, а не підтверджена наявність рослини, а поради загальні й не замінюють рекомендацій місцевих служб чи лікаря.",
-    "en": "This is a rough estimate, not confirmed presence of the plant, and the tips are general and do not replace the guidance of local services or a doctor.",
+    "uk": "Цей показник оцінює сприятливість клімату й землі, а не гарантує факт наявності рослини на ділянці прямо зараз.",
+    "en": "This index reflects how suitable the climate and land are, not a guarantee that the plant is present on the site right now.",
 }
-
 
 def nearest_grid_climate(lat, lon, max_deg=0.3):
     d = np.hypot(GRID_LAT - lat, (GRID_LON - lon) * np.cos(np.radians(lat)))
@@ -303,106 +272,93 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
     return " ".join(parts)
 
 
+LEVEL_LABEL = {
+    "uk": {"low": "нижча", "medium": "середня", "high": "вища"},
+    "en": {"low": "lower", "medium": "medium", "high": "higher"},
+}
+
+
 def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category, climate, land):
     titles = [g["title"] for g in TIP_GROUPS[lang]]
     if lang == "en":
-        place_part = f", place: {place_name}" if place_name else ""
-        cat_label = {"low": "lower", "medium": "medium", "high": "higher"}.get(category, "unknown")
+        place_part = place_name or "this point"
         level_rule = {
-            "low": "The index is lower. Keep the tone calm and light: general awareness and "
-                   "routine observation, no urgency, and say nothing that suggests special measures are needed.",
-            "medium": "The index is medium. Suggest moderate, targeted attention to typical places "
-                      "and a sensible plan before the flowering season.",
-            "high": "The index is higher. Suggest more attentive, prioritised actions: inspections "
-                    "and planning ahead of the flowering season, still without alarm.",
-        }.get(category, "Keep the tone cautious.")
+            "low": "Index is lower: routine, low-effort actions only (periodic observation), no urgency.",
+            "medium": "Index is medium: targeted checks of typical places and planning before flowering.",
+            "high": "Index is higher: prioritised actions (inspections and mowing before flowering, "
+                    "preventing seed formation), businesslike and without alarm.",
+        }.get(category, "Keep a cautious tone.")
         return (
             "Respond in English only.\n\n"
-            "You are an assistant on an ecology website about common ragweed "
-            "(Ambrosia artemisiifolia), an invasive plant, in Ukraine.\n"
-            "A machine learning model estimated how similar the conditions in this area are to "
-            f"places where ragweed has already been recorded (coordinates {lat}, {lon}{place_part}). "
-            "This is a relative suitability index, not the probability that ragweed grows here.\n"
-            f"- Index: {risk_percent}% (higher than {percentile}% of Ukraine's territory; "
-            f"category: {cat_label})\n"
-            f"- Mean temperature for the May-September season: "
-            f"{num(climate.get('temp_mean'), 1, 'unknown')} °C\n"
-            f"- Mean precipitation for the season: "
-            f"{num(climate.get('precip_sum'), 1, 'unknown')} mm/day\n"
-            f"- Mean humidity: {num(climate.get('humidity_mean'), 1, 'unknown')}%\n"
-            f"- Share of cropland nearby: {pct(land.get('cropland'), 'unknown')}%\n"
-            f"- Share of built-up land nearby: {pct(land.get('built'), 'unknown')}%\n\n"
-            "Return ONLY a JSON object, with no markdown and no text around it, of this form:\n"
-            '{"summary": "...", "groups": [{"items": ["...", "..."]}, {"items": ["...", "..."]}, '
-            '{"items": ["...", "..."]}]}\n\n'
-            "Rules:\n"
-            "- summary: 1-2 short sentences for a general reader about what the result means and "
-            "which conditions (climate, cropland, built-up share) may have influenced it. Do not "
-            "claim that conditions promote or hold back the plant; only say what may have "
-            "influenced the index.\n"
-            f"- groups: exactly three, in this order: 1) {titles[0]}; 2) {titles[1]}; "
-            f"3) {titles[2]}. Each has 2 items, one short sentence each (up to 20 words).\n"
+            "You are an ecological consultant. Explain a machine learning model result about "
+            "common ragweed (Ambrosia artemisiifolia) in Ukraine in natural, restrained, clear "
+            "language for an adult.\n\n"
+            f"INPUT:\n- Place: {place_part}\n"
+            f"- Suitability index: {risk_percent}% (category: {LEVEL_LABEL['en'].get(category, 'unknown')})\n"
+            f"- Share of cropland: {pct(land.get('cropland'), 'unknown')}%\n"
+            f"- Share of built-up land: {pct(land.get('built'), 'unknown')}%\n"
+            f"- Mean May-September temperature: {num(climate.get('temp_mean'), 1, 'unknown')} °C\n"
+            f"- Mean precipitation: {num(climate.get('precip_sum'), 1, 'unknown')} mm/day\n\n"
+            "Return ONLY a JSON object, no markdown:\n"
+            '{"reason": "...", "actions": ["...", "...", "..."]}\n\n'
+            "RULES:\n"
+            "- reason: ONE sentence naming which factor (cropland, built-up share, temperature or "
+            "precipitation) most likely influenced this index. Do not claim the conditions "
+            "definitely promote or hold back the plant. No introductory phrases, no childish "
+            "wording, no heavy bureaucratic words, no comparison with other regions.\n"
+            f"- actions: exactly three, one short concrete sentence each (up to 20 words), for: "
+            f"1) {titles[0]}; 2) {titles[1]}; 3) {titles[2]}.\n"
             f"- {level_rule}\n"
-            "- Tailor the tips to the data: if the share of cropland is high, give the farmers' "
-            "group more specific points about field margins and fallow land; if the share of "
-            "built-up land is high, give the municipal group more points about vacant lots, "
-            "roadsides and construction sites; if both are small, keep tips brief and general. "
-            "The three groups must not repeat each other.\n"
-            "- Do not name herbicides, doses or chemical treatment. Medical advice is limited to "
-            "at most one short phrase in the residents group (for example, to consult a doctor "
-            "about symptoms); never name medications.\n"
-            "- Never call the index a probability or say that ragweed is definitely present. "
-            "Avoid words like \"extremely\", \"ideal\", \"guaranteed\". Do not use long dashes.\n"
-            "- Do not add any disclaimer sentence; it is added separately."
+            "- Adapt to the data: high cropland share, more specific action for landowners "
+            "(field margins, fallow land); high built-up share, more specific action for "
+            "municipal services (vacant lots, roadsides, construction sites).\n"
+            "- The third action is a warning/heads-up for residents and allergy sufferers. No "
+            "household tips (washing hair, closing windows), no doctors, no medications.\n"
+            "- Never call the index a probability. No herbicides or doses. No long dashes. "
+            "Do not add a disclaimer, it is added separately.\n"
+            "- Style: concise, businesslike, grounded in the landscape."
         )
 
-    place_part = f", місце: {place_name}" if place_name else ""
-    cat_label = {"low": "нижча", "medium": "середня", "high": "вища"}.get(category, "невідома")
+    place_part = place_name or "ця точка"
     level_rule = {
-        "low": "Індекс нижчий. Тон спокійний і легкий: загальна обізнаність і звичайне спостереження, "
-               "без терміновості, і нічого, що натякає на потребу особливих заходів.",
-        "medium": "Індекс середній. Запропонуй помірну, цілеспрямовану увагу до типових місць "
-                  "і розумний план перед сезоном цвітіння.",
-        "high": "Індекс вищий. Запропонуй уважніші, пріоритетні дії: огляди та планування "
-                "заздалегідь до сезону цвітіння, але без тривожного тону.",
+        "low": "Індекс нижчий: лише прості дії без зусиль (періодичне спостереження), без терміновості.",
+        "medium": "Індекс середній: цілеспрямовані огляди типових місць і планування перед цвітінням.",
+        "high": "Індекс вищий: пріоритетні дії (огляди й скошування до цвітіння, недопущення "
+                "утворення насіння), по-діловому й без тривоги.",
     }.get(category, "Тон обережний.")
     return (
         "Відповідай лише українською мовою.\n\n"
-        "Ти асистент екологічного сайту про інвазивну рослину амброзію полинолисту "
-        "(Ambrosia artemisiifolia) в Україні.\n"
-        "Модель машинного навчання оцінила, наскільки умови в цій місцевості схожі на ті, "
-        f"де амброзію вже фіксували (координати {lat}, {lon}{place_part}). "
-        "Це відносний індекс придатності, а не ймовірність того, що амброзія тут росте.\n"
-        f"- Індекс: {dec(risk_percent, 'uk')}% (вище, ніж на {percentile}% території України; "
-        f"категорія: {cat_label})\n"
-        f"- Середня температура за сезон (травень-вересень): "
-        f"{dec(num(climate.get('temp_mean')), 'uk')} °C\n"
-        f"- Середні опади за сезон: {dec(num(climate.get('precip_sum')), 'uk')} мм/день\n"
-        f"- Середня вологість: {dec(num(climate.get('humidity_mean')), 'uk')}%\n"
-        f"- Частка ріллі в околі: {pct(land.get('cropland'))}%\n"
-        f"- Частка забудови в околі: {pct(land.get('built'))}%\n\n"
-        "Поверни ЛИШЕ JSON-об'єкт, без markdown і без тексту навколо, такого вигляду:\n"
-        '{"summary": "...", "groups": [{"items": ["...", "..."]}, {"items": ["...", "..."]}, '
-        '{"items": ["...", "..."]}]}\n\n'
-        "Правила:\n"
-        "- summary: 1-2 короткі речення для звичайної людини про те, що означає результат "
-        "і які умови (клімат, частка ріллі, частка забудови) могли на нього вплинути. Не "
-        "стверджуй, що умови сприяють рослині чи стримують її, лише що могло вплинути на індекс.\n"
-        f"- groups: рівно три, у такому порядку: 1) {titles[0]}; 2) {titles[1]}; "
-        f"3) {titles[2]}. У кожної по 2 пункти, по одному короткому реченню (до 20 слів).\n"
+        "Ти екологічний консультант. Твоє завдання: пояснити результат моделі машинного навчання "
+        "про амброзію полинолисту (Ambrosia artemisiifolia) в Україні природною, стриманою та "
+        "зрозумілою мовою для дорослого користувача.\n\n"
+        f"ВХІДНІ ДАНІ:\n- Місце: {place_part}\n"
+        f"- Індекс придатності: {dec(risk_percent, 'uk')}% (категорія: {LEVEL_LABEL['uk'].get(category, 'невідома')})\n"
+        f"- Частка ріллі: {pct(land.get('cropland'))}%\n"
+        f"- Частка забудови: {pct(land.get('built'))}%\n"
+        f"- Середня температура травня-вересня: {dec(num(climate.get('temp_mean')), 'uk')} °C\n"
+        f"- Середні опади: {dec(num(climate.get('precip_sum')), 'uk')} мм/день\n\n"
+        "Поверни ЛИШЕ JSON-об'єкт, без markdown:\n"
+        '{"reason": "...", "actions": ["...", "...", "..."]}\n\n'
+        "ПРАВИЛА:\n"
+        "- reason: ОДНЕ речення про те, який фактор (рілля, забудова, температура чи опади) "
+        "найімовірніше вплинув на цей індекс. Не стверджуй, що умови точно сприяють рослині чи "
+        "стримують її. Без вступних фраз («Простими словами:»), без дитячих зворотів, без важкої "
+        "канцелярії («експансія», «вегетаційний період»), без порівнянь з іншими регіонами.\n"
+        f"- actions: рівно три, по одному короткому конкретному реченню (до 20 слів), для: "
+        f"1) {titles[0]}; 2) {titles[1]}; 3) {titles[2]}.\n"
         f"- {level_rule}\n"
-        "- Підлаштуй поради під дані: якщо частка ріллі висока, для аграріїв дай більш конкретні "
-        "пункти про краї полів і перелоги; якщо висока частка забудови, для комунальних служб "
-        "дай більше про пустирі, узбіччя й будмайданчики; якщо обидві малі, поради короткі й "
-        "загальні. Групи не мають повторювати одна одну.\n"
-        "- Не називай гербіциди, дози чи хімічну обробку. Медичні поради лише одна коротка "
-        "фраза в групі мешканців (наприклад, із питань симптомів звернутися до лікаря), "
-        "ліків не називай.\n"
-        "- Ніколи не називай індекс ймовірністю і не стверджуй, що амброзія точно є. Не вживай "
-        "слів «надзвичайно», «ідеальні», «гарантовано». Пиши грамотно, вживай «рілля», а не "
-        "«пашня». Десяткові числа через кому. Не використовуй довгих тире.\n"
-        "- Не додавай підсумкового застереження, воно додається окремо."
+        "- Підлаштуй під дані: висока частка ріллі, конкретніша дія для землевласників (краї "
+        "полів, перелоги); висока частка забудови, конкретніша дія для комунальних служб "
+        "(пустирі, узбіччя, будмайданчики).\n"
+        "- Третя дія це попередження для мешканців та алергіків. БЕЗ побутових порад (миття "
+        "волосся, зачинені вікна), БЕЗ згадок про лікарів і ліки.\n"
+        "- Ніколи не називай індекс ймовірністю. Без гербіцидів і доз. Без довгих тире. "
+        "Пиши грамотно, вживай «рілля». Десяткові числа через кому. "
+        "Не додавай застереження, воно додається окремо.\n"
+        "- Стиль: лаконічний, діловий, ландшафтно-обґрунтований, без дитячого тону й без "
+        "академічного занудства."
     )
+
 
 def parse_llm_json(text, lang):
     text = text.strip()
@@ -411,18 +367,13 @@ def parse_llm_json(text, lang):
         if text.lower().startswith("json"):
             text = text[4:]
     data = json.loads(text)
-    summary = str(data["summary"]).strip()
-    raw_groups = data["groups"]
-    if not summary or len(raw_groups) != 3:
+    reason = str(data["reason"]).strip()
+    actions = [str(a).strip() for a in data["actions"]]
+    if not reason or len(actions) != 3 or not all(actions):
         raise ValueError("unexpected structure")
     titles = [g["title"] for g in TIP_GROUPS[lang]]
-    groups = []
-    for title, g in zip(titles, raw_groups):
-        items = [str(x).strip() for x in g["items"] if str(x).strip()][:3]
-        if not items:
-            raise ValueError("empty group")
-        groups.append({"title": title, "items": items})
-    return summary, groups
+    groups = [{"title": t, "items": [a]} for t, a in zip(titles, actions)]
+    return reason, groups
 
 @app.route("/api/explain", methods=["POST"])
 def explain():
@@ -444,7 +395,13 @@ def explain():
                           category, climate, land)
     closing = CLOSING[lang]
 
-    summary = None
+    label = LEVEL_LABEL[lang].get(category, "")
+    if lang == "en":
+        intro = f"The suitability index is {risk_percent}% ({label} category)."
+    else:
+        intro = f"Індекс придатності становить {dec(risk_percent, 'uk')}% ({label} категорія)."
+
+    reason = None
     groups = []
     last_error = None if GEMINI_API_KEY else "GEMINI_API_KEY не налаштовано"
     for attempt in range(GEMINI_ATTEMPTS if GEMINI_API_KEY else 0):
@@ -470,14 +427,14 @@ def explain():
                 break
             data = resp.json()
             text = data["candidates"][0]["content"]["parts"][0]["text"]
-            summary, groups = parse_llm_json(text, lang)
+            reason, groups = parse_llm_json(text, lang)
             break
         except Exception as e:
             last_error = str(e)
-            summary = None
+            reason = None
             time.sleep(2 * (attempt + 1))
 
-    if summary is None:
+    if reason is None:
         print(f"explain fallback: {last_error}")
         return jsonify({
             "explanation": fallback_explanation(
@@ -487,7 +444,7 @@ def explain():
             "fallback": True,
         })
 
-    return jsonify({"explanation": summary, "groups": groups, "closing": closing})
+    return jsonify({"explanation": f"{intro} {reason}", "groups": groups, "closing": closing})
 
 
 if __name__ == "__main__":
