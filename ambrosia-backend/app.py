@@ -138,10 +138,12 @@ def predict():
             "code": "no_land_data",
         }), 422
 
+    source = "live"
     try:
         climate = fetch_climate(round(lat10 / 10, 1), round(lon10 / 10, 1))
     except Exception as e:
         climate = nearest_grid_climate(lat, lon)
+        source = "grid"
         if climate is None:
             return jsonify({
                 "error": f"Не вдалось отримати кліматичні дані: {e}",
