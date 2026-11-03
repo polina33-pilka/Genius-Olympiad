@@ -87,7 +87,7 @@ def fetch_climate(lat_rounded, lon_rounded):
         "daily": "temperature_2m_mean,precipitation_sum,relative_humidity_2m_mean",
         "timezone": "auto",
     }
-    resp = requests.get(OPEN_METEO_URL, params=params, timeout=30)
+    resp = requests.get(OPEN_METEO_URL, params=params, timeout=10)
     resp.raise_for_status()
     data = resp.json()
 
@@ -143,6 +143,7 @@ def predict():
     try:
         climate = fetch_climate(round(lat10 / 10, 1), round(lon10 / 10, 1))
     except Exception as e:
+        print(f"climate fallback: {e}")
         climate = nearest_grid_climate(lat, lon)
         source = "grid"
         if climate is None:
