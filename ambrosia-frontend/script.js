@@ -203,7 +203,7 @@ function initMap() {
         if (!isInsideUkraine(lat, lon)) return;
         const cat = f.properties.risk_category;
         L.circleMarker([lat, lon], {
-          radius: 4,
+          radius: 3,
           fillColor: COLORS[cat] || "#999",
           color: COLORS[cat] || "#999",
           weight: 1,
