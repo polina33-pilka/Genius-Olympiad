@@ -387,7 +387,7 @@ def explain():
     prompt = build_prompt(lang, lat, lon, place_name, risk_percent, percentile,
                           category, climate, land)
 
-    groups = TIP_GROUPS[lang] if category in ("medium", "high") else []
+    groups = TIP_GROUPS[lang]
     closing = CLOSING[lang]
 
     last_error = None if GEMINI_API_KEY else "GEMINI_API_KEY не налаштовано"
