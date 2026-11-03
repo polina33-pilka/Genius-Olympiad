@@ -50,6 +50,67 @@ GRID_CLIMATE = pd.read_csv(os.path.join(DATA_DIR, "full_grid_climate_data_v3.csv
 GRID_LAT = GRID_CLIMATE["lat_grid"].to_numpy()
 GRID_LON = GRID_CLIMATE["lon_grid"].to_numpy()
 
+# Фіксовані поради: однакові для всіх, не залежать від ШІ
+TIP_GROUPS = {
+    "uk": [
+        {
+            "title": "Комунальним службам та ОТГ",
+            "items": [
+                "Перед цвітінням (з липня) оглядати узбіччя, пустирі, будівельні майданчики та занедбані ділянки.",
+                "Планувати скошування таких місць до початку цвітіння рослин.",
+                "Фіксувати знайдені осередки (місце й дата), щоб планувати повторні огляди.",
+            ],
+        },
+        {
+            "title": "Аграріям та фермерам",
+            "items": [
+                "З червня-липня перевіряти краї полів, перелоги та необроблені ділянки.",
+                "Не допускати цвітіння й утворення насіння на таких ділянках.",
+                "Щодо методів боротьби радитися з агрономом або місцевою службою захисту рослин.",
+            ],
+        },
+        {
+            "title": "Мешканцям та алергікам",
+            "items": [
+                "Повідомляти місцевій владі про великі зарості на занедбаних ділянках поруч із домом.",
+                "У серпні-вересні стежити за місцевими прогнозами пилку.",
+                "З питань симптомів і лікування звертатися до лікаря.",
+            ],
+        },
+    ],
+    "en": [
+        {
+            "title": "Municipal services and local communities",
+            "items": [
+                "Before flowering (from July), inspect roadsides, vacant lots, construction sites and neglected land.",
+                "Plan mowing of such places before the plants start flowering.",
+                "Record any hotspots found (place and date) to plan repeat inspections.",
+            ],
+        },
+        {
+            "title": "Farmers and agricultural producers",
+            "items": [
+                "From June-July, check field margins, fallow land and uncultivated areas.",
+                "Do not let plants flower and set seed on such areas.",
+                "Ask an agronomist or the local plant protection service about control methods.",
+            ],
+        },
+        {
+            "title": "Residents and people with allergies",
+            "items": [
+                "Tell local authorities about large patches of weeds on neglected land near homes.",
+                "In August-September, follow local pollen forecasts.",
+                "For questions about symptoms and treatment, consult a doctor.",
+            ],
+        },
+    ],
+}
+
+CLOSING = {
+    "uk": "Це орієнтовна оцінка, а не підтверджена наявність рослини, а поради загальні й не замінюють рекомендацій місцевих служб чи лікаря.",
+    "en": "This is a rough estimate, not confirmed presence of the plant, and the tips are general and do not replace the guidance of local services or a doctor.",
+}
+
 
 def nearest_grid_climate(lat, lon, max_deg=0.3):
     d = np.hypot(GRID_LAT - lat, (GRID_LON - lon) * np.cos(np.radians(lat)))
@@ -202,44 +263,28 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
     pc = to_float(percentile)
     if rp is None or pc is None:
         return ("Пояснення від ШІ зараз не вдалося отримати. Індекс придатності є відносною "
-                "оцінкою того, наскільки умови схожі на місця, де фіксували амброзію. "
-                "Це не підтверджена наявність рослини." if uk else
+                "оцінкою того, наскільки умови схожі на місця, де фіксували амброзію." if uk else
                 "The AI explanation could not be obtained right now. The suitability index is a "
                 "relative estimate of how similar conditions are to places where ragweed has been "
-                "recorded. It does not confirm that the plant is present.")
+                "recorded.")
     pc = int(round(pc))
     built = to_float((land or {}).get("built"))
     cropland = to_float((land or {}).get("cropland"))
-    temp = to_float((climate or {}).get("temp_mean"))
-    hum = to_float((climate or {}).get("humidity_mean"))
 
     if uk:
         level = {"low": "нижча", "medium": "середня", "high": "вища"}.get(category, "невизначена")
         intro = f"Для місця «{place_name}» " if place_name else "Для цієї точки "
         parts = [intro + f"індекс придатності становить {dec(f'{rp:.1f}', 'uk')}% (категорія: {level}), "
                           f"тобто вище, ніж на {pc}% території України."]
-
         drivers = []
         if built is not None and built >= 0.15:
             drivers.append("значна частка забудови")
         if cropland is not None and cropland >= 0.4:
             drivers.append("значна частка ріллі")
         if drivers:
-            parts.append("В околі є " + " і ".join(drivers) +
-                         ", а такі порушені землі амброзія заселяє найлегше.")
+            parts.append("На результат могла вплинути " + " і ".join(drivers) + " в околі.")
         else:
             parts.append("Частка ріллі та забудови в околі невелика.")
-        if temp is not None and hum is not None:
-            parts.append(f"Середня температура за сезон травень-вересень становить "
-                         f"{dec(f'{temp:.1f}', 'uk')} °C, вологість {hum:.0f}%.")
-        if category == "low":
-            parts.append("Навіть за нижчого індексу окремі рослини можливі, тому в період "
-                         "цвітіння варто бути уважним.")
-        else:
-            parts.append("Тому в період цвітіння влітку та на початку осені варто уважніше "
-                         "стежити за появою рослини, а людям з алергією за потреби звернутися до лікаря.")
-        parts.append("Це орієнтовна оцінка схожості умов на місця, де фіксували амброзію, "
-                     "а не підтверджена наявність рослини.")
         return " ".join(parts)
 
     level = {"low": "lower", "medium": "medium", "high": "higher"}.get(category, "undetermined")
@@ -252,21 +297,9 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
     if cropland is not None and cropland >= 0.4:
         drivers.append("a large share of cropland")
     if drivers:
-        parts.append("The surroundings have " + " and ".join(drivers) +
-                     ", the kind of disturbed land ragweed colonises most easily.")
+        parts.append("The result may be influenced by " + " and ".join(drivers) + " nearby.")
     else:
         parts.append("The share of cropland and built-up land nearby is small.")
-    if temp is not None and hum is not None:
-        parts.append(f"The mean May-September temperature is {temp:.1f} °C and humidity is {hum:.0f}%.")
-    if category == "low":
-        parts.append("Even with a lower index, single plants are possible, so it is worth "
-                     "staying attentive during the flowering season.")
-    else:
-        parts.append("So during the flowering season in summer and early autumn it is worth "
-                     "keeping a closer eye on the area, and people with allergies can consult "
-                     "a doctor if needed.")
-    parts.append("This is a rough estimate of how similar conditions are to places where "
-                 "ragweed has been recorded, not confirmation that the plant is present.")
     return " ".join(parts)
 
 
@@ -292,9 +325,9 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
             f"- Mean humidity: {num(climate.get('humidity_mean'), 1, 'unknown')}%\n"
             f"- Share of cropland nearby: {crop_pct}%\n"
             f"- Share of built-up land nearby: {built_pct}%\n\n"
-            "Write a short explanation (3-5 sentences) for a general reader: what this result "
-            "means and which of these conditions may have influenced it. You may add one short, gentle and general piece of advice (for example, to keep a closer eye on plants during the flowering season in summer and early autumn, and for people with allergies to consult a doctor about health questions). Do not give specific instructions about removing the plant, chemical treatment, medical treatment or medication. Finish with one sentence saying "
-            "that this is a rough estimate and not confirmed presence of the plant.\n\n"
+            "Write only 1-2 short sentences for a general reader: what this result means and "
+            "which of these conditions may have influenced it. Do not give any advice and do not "
+            "add a concluding disclaimer, because tips and a disclaimer are added separately.\n\n"
             "Never call the index a probability or a chance of ragweed appearing; it is only a "
             "relative measure of how similar the conditions are. Keep a cautious tone: the model "
             "has moderate accuracy, so avoid words like \"extremely\", \"ideal\" or "
@@ -322,9 +355,9 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         f"- Середня вологість: {dec(num(climate.get('humidity_mean')), 'uk')}%\n"
         f"- Частка ріллі в околі: {crop_pct}%\n"
         f"- Частка забудови в околі: {built_pct}%\n\n"
-        "Напиши коротке (3-5 речень) пояснення для звичайної людини: що означає такий "
-        "результат і які з цих умов могли на нього вплинути. Можеш додати одну коротку, м'яку й загальну пораду (наприклад, уважніше стежити за рослинами в період цвітіння влітку та на початку осені, а з питань здоров'я чи алергії звернутися до лікаря). Не давай конкретних інструкцій щодо видалення рослини, хімічної обробки, лікування чи ліків. Наприкінці одним реченням зазнач, що це орієнтовна оцінка, "
-        "а не підтверджена наявність рослини.\n\n"
+        "Напиши лише 1-2 короткі речення для звичайної людини: що означає такий результат "
+        "і які з цих умов могли на нього вплинути. Не давай жодних порад і не додавай "
+        "підсумкового застереження, бо поради та застереження додаються окремо.\n\n"
         "Ніколи не називай індекс ймовірністю чи шансом появи амброзії, це лише відносна "
         "оцінка схожості умов. Тон обережний: модель має помірну точність, тому не вживай "
         "слів на кшталт «надзвичайно», «ідеальні», «гарантовано». "
@@ -354,27 +387,8 @@ def explain():
     prompt = build_prompt(lang, lat, lon, place_name, risk_percent, percentile,
                           category, climate, land)
 
-    if category in ("medium", "high"):
-        if lang == "en":
-            prompt += (
-                "\n\nFor people with allergies, add one or two cautious, general tips for the "
-                "ragweed flowering season (August-September): check local pollen forecasts, "
-                "consider limiting time outdoors on dry, windy days when pollen levels may be "
-                "higher, keep windows closed at such times, and change clothes and wash hair "
-                "after being outside. Say that questions about symptoms and treatment should be "
-                "discussed with a doctor or pharmacist. Do not name specific medications and do "
-                "not promise that these steps prevent a reaction."
-            )
-        else:
-            prompt += (
-                "\n\nДля людей з алергією додай одну-дві обережні загальні поради на період "
-                "цвітіння амброзії (серпень-вересень): стежити за місцевими прогнозами пилку, "
-                "за можливості менше бувати надворі в суху вітряну погоду, коли пилку може "
-                "бути більше, у такі дні тримати вікна зачиненими, після прогулянки змінити "
-                "одяг і вимити волосся. Зазнач, що питання про симптоми й лікування варто "
-                "обговорити з лікарем або фармацевтом. Не називай конкретних ліків і не "
-                "обіцяй, що ці кроки запобігають реакції."
-            )
+    groups = TIP_GROUPS[lang] if category in ("medium", "high") else []
+    closing = CLOSING[lang]
 
     last_error = None if GEMINI_API_KEY else "GEMINI_API_KEY не налаштовано"
     text = None
@@ -404,21 +418,15 @@ def explain():
             time.sleep(2 * (attempt + 1))
 
     if text is None:
-        explanation = fallback_explanation(
-            lang, place_name, risk_percent, percentile, category, climate, land)
-        if category in ("medium", "high"):
-            explanation += (
-                " During the ragweed flowering season (August-September), people with allergies "
-                "can check local pollen forecasts and talk to a doctor or pharmacist about "
-                "symptoms."
-                if lang == "en" else
-                " У період цвітіння амброзії (серпень-вересень) людям з алергією варто "
-                "стежити за місцевими прогнозами пилку та обговорити симптоми з лікарем "
-                "або фармацевтом."
-            )
-        return jsonify({"explanation": explanation, "fallback": True})
+        return jsonify({
+            "explanation": fallback_explanation(
+                lang, place_name, risk_percent, percentile, category, climate, land),
+            "groups": groups,
+            "closing": closing,
+            "fallback": True,
+        })
 
-    return jsonify({"explanation": text})
+    return jsonify({"explanation": text, "groups": groups, "closing": closing})
 
 
 if __name__ == "__main__":
