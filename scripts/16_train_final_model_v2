@@ -28,7 +28,7 @@ importance = pd.Series(model.feature_importances_, index=FEATURES).sort_values(a
 print("\nВажливість ознак:")
 print(importance.round(3).to_string())
 
-grid = pd.read_csv(OUT_DIR + "full_grid_climate_data.csv")
+grid = pd.read_csv(OUT_DIR + "full_grid_climate_data_v3.csv")
 grid["lat10"] = np.rint(grid["lat_grid"] * 10).astype(int)
 grid["lon10"] = np.rint(grid["lon_grid"] * 10).astype(int)
 land = pd.read_csv(OUT_DIR + "landcover_01deg.csv")[["lat10", "lon10"] + LAND]
