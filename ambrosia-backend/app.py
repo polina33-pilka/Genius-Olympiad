@@ -20,7 +20,7 @@ OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-GEMINI_TIMEOUT = 12
+GEMINI_TIMEOUT = 20
 GEMINI_ATTEMPTS = 2
 
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*")
@@ -304,11 +304,18 @@ def fallback_explanation(lang, place_name, risk_percent, percentile, category, c
 
 
 def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category, climate, land):
+    titles = [g["title"] for g in TIP_GROUPS[lang]]
     if lang == "en":
         place_part = f", place: {place_name}" if place_name else ""
         cat_label = {"low": "lower", "medium": "medium", "high": "higher"}.get(category, "unknown")
-        crop_pct = pct(land.get("cropland"), "unknown")
-        built_pct = pct(land.get("built"), "unknown")
+        level_rule = {
+            "low": "The index is lower. Keep the tone calm and light: general awareness and "
+                   "routine observation, no urgency, and say nothing that suggests special measures are needed.",
+            "medium": "The index is medium. Suggest moderate, targeted attention to typical places "
+                      "and a sensible plan before the flowering season.",
+            "high": "The index is higher. Suggest more attentive, prioritised actions: inspections "
+                    "and planning ahead of the flowering season, still without alarm.",
+        }.get(category, "Keep the tone cautious.")
         return (
             "Respond in English only.\n\n"
             "You are an assistant on an ecology website about common ragweed "
@@ -323,23 +330,42 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
             f"- Mean precipitation for the season: "
             f"{num(climate.get('precip_sum'), 1, 'unknown')} mm/day\n"
             f"- Mean humidity: {num(climate.get('humidity_mean'), 1, 'unknown')}%\n"
-            f"- Share of cropland nearby: {crop_pct}%\n"
-            f"- Share of built-up land nearby: {built_pct}%\n\n"
-            "Write only 1-2 short sentences for a general reader: what this result means and "
-            "which of these conditions may have influenced it. Do not give any advice and do not "
-            "add a concluding disclaimer, because tips and a disclaimer are added separately.\n\n"
-            "Never call the index a probability or a chance of ragweed appearing; it is only a "
-            "relative measure of how similar the conditions are. Keep a cautious tone: the model "
-            "has moderate accuracy, so avoid words like \"extremely\", \"ideal\" or "
-            "\"guaranteed\". Start directly with the substance, without introductory phrases "
-            "such as \"Here is the explanation\". Do not use long dashes. Use no headings, lists "
-            "or formatting, only plain text."
+            f"- Share of cropland nearby: {pct(land.get('cropland'), 'unknown')}%\n"
+            f"- Share of built-up land nearby: {pct(land.get('built'), 'unknown')}%\n\n"
+            "Return ONLY a JSON object, with no markdown and no text around it, of this form:\n"
+            '{"summary": "...", "groups": [{"items": ["...", "..."]}, {"items": ["...", "..."]}, '
+            '{"items": ["...", "..."]}]}\n\n'
+            "Rules:\n"
+            "- summary: 1-2 short sentences for a general reader about what the result means and "
+            "which conditions (climate, cropland, built-up share) may have influenced it. Do not "
+            "claim that conditions promote or hold back the plant; only say what may have "
+            "influenced the index.\n"
+            f"- groups: exactly three, in this order: 1) {titles[0]}; 2) {titles[1]}; "
+            f"3) {titles[2]}. Each has 2 items, one short sentence each (up to 20 words).\n"
+            f"- {level_rule}\n"
+            "- Tailor the tips to the data: if the share of cropland is high, give the farmers' "
+            "group more specific points about field margins and fallow land; if the share of "
+            "built-up land is high, give the municipal group more points about vacant lots, "
+            "roadsides and construction sites; if both are small, keep tips brief and general. "
+            "The three groups must not repeat each other.\n"
+            "- Do not name herbicides, doses or chemical treatment. Medical advice is limited to "
+            "at most one short phrase in the residents group (for example, to consult a doctor "
+            "about symptoms); never name medications.\n"
+            "- Never call the index a probability or say that ragweed is definitely present. "
+            "Avoid words like \"extremely\", \"ideal\", \"guaranteed\". Do not use long dashes.\n"
+            "- Do not add any disclaimer sentence; it is added separately."
         )
 
     place_part = f", місце: {place_name}" if place_name else ""
     cat_label = {"low": "нижча", "medium": "середня", "high": "вища"}.get(category, "невідома")
-    crop_pct = pct(land.get("cropland"))
-    built_pct = pct(land.get("built"))
+    level_rule = {
+        "low": "Індекс нижчий. Тон спокійний і легкий: загальна обізнаність і звичайне спостереження, "
+               "без терміновості, і нічого, що натякає на потребу особливих заходів.",
+        "medium": "Індекс середній. Запропонуй помірну, цілеспрямовану увагу до типових місць "
+                  "і розумний план перед сезоном цвітіння.",
+        "high": "Індекс вищий. Запропонуй уважніші, пріоритетні дії: огляди та планування "
+                "заздалегідь до сезону цвітіння, але без тривожного тону.",
+    }.get(category, "Тон обережний.")
     return (
         "Відповідай лише українською мовою.\n\n"
         "Ти асистент екологічного сайту про інвазивну рослину амброзію полинолисту "
@@ -353,20 +379,50 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         f"{dec(num(climate.get('temp_mean')), 'uk')} °C\n"
         f"- Середні опади за сезон: {dec(num(climate.get('precip_sum')), 'uk')} мм/день\n"
         f"- Середня вологість: {dec(num(climate.get('humidity_mean')), 'uk')}%\n"
-        f"- Частка ріллі в околі: {crop_pct}%\n"
-        f"- Частка забудови в околі: {built_pct}%\n\n"
-        "Напиши лише 1-2 короткі речення для звичайної людини: що означає такий результат "
-        "і які з цих умов могли на нього вплинути. Не давай жодних порад і не додавай "
-        "підсумкового застереження, бо поради та застереження додаються окремо.\n\n"
-        "Ніколи не називай індекс ймовірністю чи шансом появи амброзії, це лише відносна "
-        "оцінка схожості умов. Тон обережний: модель має помірну точність, тому не вживай "
-        "слів на кшталт «надзвичайно», «ідеальні», «гарантовано». "
-        "Пиши грамотно, перевір орфографію і вживай «рілля», а не «пашня». "
-        "Десяткові числа записуй через кому. Не використовуй довгих тире. "
-        "Починай одразу з суті, без вступних фраз на кшталт «Ось пояснення». "
-        "Не використовуй заголовків, списків і форматування, лише звичайний текст."
+        f"- Частка ріллі в околі: {pct(land.get('cropland'))}%\n"
+        f"- Частка забудови в околі: {pct(land.get('built'))}%\n\n"
+        "Поверни ЛИШЕ JSON-об'єкт, без markdown і без тексту навколо, такого вигляду:\n"
+        '{"summary": "...", "groups": [{"items": ["...", "..."]}, {"items": ["...", "..."]}, '
+        '{"items": ["...", "..."]}]}\n\n'
+        "Правила:\n"
+        "- summary: 1-2 короткі речення для звичайної людини про те, що означає результат "
+        "і які умови (клімат, частка ріллі, частка забудови) могли на нього вплинути. Не "
+        "стверджуй, що умови сприяють рослині чи стримують її, лише що могло вплинути на індекс.\n"
+        f"- groups: рівно три, у такому порядку: 1) {titles[0]}; 2) {titles[1]}; "
+        f"3) {titles[2]}. У кожної по 2 пункти, по одному короткому реченню (до 20 слів).\n"
+        f"- {level_rule}\n"
+        "- Підлаштуй поради під дані: якщо частка ріллі висока, для аграріїв дай більш конкретні "
+        "пункти про краї полів і перелоги; якщо висока частка забудови, для комунальних служб "
+        "дай більше про пустирі, узбіччя й будмайданчики; якщо обидві малі, поради короткі й "
+        "загальні. Групи не мають повторювати одна одну.\n"
+        "- Не називай гербіциди, дози чи хімічну обробку. Медичні поради лише одна коротка "
+        "фраза в групі мешканців (наприклад, із питань симптомів звернутися до лікаря), "
+        "ліків не називай.\n"
+        "- Ніколи не називай індекс ймовірністю і не стверджуй, що амброзія точно є. Не вживай "
+        "слів «надзвичайно», «ідеальні», «гарантовано». Пиши грамотно, вживай «рілля», а не "
+        "«пашня». Десяткові числа через кому. Не використовуй довгих тире.\n"
+        "- Не додавай підсумкового застереження, воно додається окремо."
     )
 
+def parse_llm_json(text, lang):
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`").strip()
+        if text.lower().startswith("json"):
+            text = text[4:]
+    data = json.loads(text)
+    summary = str(data["summary"]).strip()
+    raw_groups = data["groups"]
+    if not summary or len(raw_groups) != 3:
+        raise ValueError("unexpected structure")
+    titles = [g["title"] for g in TIP_GROUPS[lang]]
+    groups = []
+    for title, g in zip(titles, raw_groups):
+        items = [str(x).strip() for x in g["items"] if str(x).strip()][:3]
+        if not items:
+            raise ValueError("empty group")
+        groups.append({"title": title, "items": items})
+    return summary, groups
 
 @app.route("/api/explain", methods=["POST"])
 def explain():
@@ -386,12 +442,11 @@ def explain():
 
     prompt = build_prompt(lang, lat, lon, place_name, risk_percent, percentile,
                           category, climate, land)
-
-    groups = TIP_GROUPS[lang]
     closing = CLOSING[lang]
 
+    summary = None
+    groups = []
     last_error = None if GEMINI_API_KEY else "GEMINI_API_KEY не налаштовано"
-    text = None
     for attempt in range(GEMINI_ATTEMPTS if GEMINI_API_KEY else 0):
         try:
             resp = requests.post(
@@ -400,7 +455,10 @@ def explain():
                     "x-goog-api-key": GEMINI_API_KEY,
                     "Content-Type": "application/json",
                 },
-                json={"contents": [{"parts": [{"text": prompt}]}]},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"responseMimeType": "application/json"},
+                },
                 timeout=GEMINI_TIMEOUT,
             )
             if resp.status_code == 503:
@@ -412,21 +470,24 @@ def explain():
                 break
             data = resp.json()
             text = data["candidates"][0]["content"]["parts"][0]["text"]
+            summary, groups = parse_llm_json(text, lang)
             break
         except Exception as e:
             last_error = str(e)
+            summary = None
             time.sleep(2 * (attempt + 1))
 
-    if text is None:
+    if summary is None:
+        print(f"explain fallback: {last_error}")
         return jsonify({
             "explanation": fallback_explanation(
                 lang, place_name, risk_percent, percentile, category, climate, land),
-            "groups": groups,
+            "groups": TIP_GROUPS[lang] if category in ("medium", "high") else [],
             "closing": closing,
             "fallback": True,
         })
 
-    return jsonify({"explanation": text, "groups": groups, "closing": closing})
+    return jsonify({"explanation": summary, "groups": groups, "closing": closing})
 
 
 if __name__ == "__main__":
