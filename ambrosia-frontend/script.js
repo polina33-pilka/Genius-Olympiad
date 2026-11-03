@@ -203,7 +203,7 @@ function initMap() {
         if (!isInsideUkraine(lat, lon)) return;
         const cat = f.properties.risk_category;
         L.circleMarker([lat, lon], {
-          radius: 3,
+          radius: 4,
           fillColor: COLORS[cat] || "#999",
           color: COLORS[cat] || "#999",
           weight: 1,
@@ -464,6 +464,13 @@ function renderResult() {
       .replace("{p}", formatNumber(Number(c.precip_sum).toFixed(1)))
       .replace("{h}", Math.round(c.humidity_mean));
     resultMain.appendChild(clim);
+  }
+  if (lastResult.climate_source === "grid") {
+    const gridNote = document.createElement("div");
+    gridNote.style.fontSize = "0.85rem";
+    gridNote.style.color = "#8a5a00";
+    gridNote.textContent = t("climate_grid_note");
+    resultMain.appendChild(gridNote);
   }
   const note = document.createElement("div");
   note.style.fontSize = "0.85rem";
