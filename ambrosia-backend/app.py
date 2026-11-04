@@ -50,7 +50,7 @@ GRID_CLIMATE = pd.read_csv(os.path.join(DATA_DIR, "full_grid_climate_data_v3.csv
 GRID_LAT = GRID_CLIMATE["lat_grid"].to_numpy()
 GRID_LON = GRID_CLIMATE["lon_grid"].to_numpy()
 
-# Фіксовані поради: однакові для всіх, не залежать від ШІ
+# Запасні поради (показуються, лише якщо ШІ не відповів)
 TIP_GROUPS = {
     "uk": [
         {"title": "Комунальним службам та ОТГ", "items": [
@@ -63,7 +63,7 @@ TIP_GROUPS = {
             "Скошувати або виривати рослини з корінням до початку цвітіння в рукавичках, масці й окулярах, а про осередки повідомляти територіальний підрозділ Держпродспоживслужби.",
         ]},
         {"title": "Алергікам", "items": [
-            "Сезон цвітіння триває з липня до жовтня, тож у цей період варто планувати час надворі з урахуванням піку пилку.",
+            "У сезон цвітіння з липня до жовтня варто обмежити тривалі прогулянки в години піку пилку, особливо у вітряну погоду.",
         ]},
     ],
     "en": [
@@ -77,7 +77,7 @@ TIP_GROUPS = {
             "Mow or pull plants up by the root before flowering, wearing gloves, a mask and glasses, and report hotspots to the territorial office of the State Service.",
         ]},
         {"title": "People with allergies", "items": [
-            "The flowering season runs from July to October, so during this period plan time outdoors with the pollen peak in mind.",
+            "During the flowering season from July to October, it is worth limiting long walks at peak pollen hours, especially in windy weather.",
         ]},
     ],
 }
@@ -86,6 +86,7 @@ CLOSING = {
     "uk": "Цей показник оцінює сприятливість клімату й землі, а не гарантує факт наявності рослини на ділянці прямо зараз.",
     "en": "This index reflects how suitable the climate and land are, not a guarantee that the plant is present on the site right now.",
 }
+
 
 def nearest_grid_climate(lat, lon, max_deg=0.3):
     d = np.hypot(GRID_LAT - lat, (GRID_LON - lon) * np.cos(np.radians(lat)))
@@ -320,7 +321,8 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
             "using only clean seed material;\n"
             "- if found: report to the territorial office of the State Service for an inspection, "
             "record the place and scale of the hotspot (a photo if possible);\n"
-            "- pollen is usually most active from 10:00 to 17:00, especially on windy days.\n\n"
+            "- pollen is usually most active from 10:00 to 17:00, especially on windy days "
+            "(use this only to suggest limiting long walks at such times, never as a ban).\n\n"
             "Return ONLY a JSON object, no markdown:\n"
             '{"reason": "...", "actions": ["...", "...", "...", "..."]}\n\n'
             "RULES:\n"
@@ -335,8 +337,10 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
             "do not drop any of the four.\n"
             "- The four groups must be different and must not repeat each other. Residents (3): "
             "their own plot and reporting hotspots to the territorial office of the State Service. "
-            "People with allergies (4): the flowering season (July-October) and planning time "
-            "outdoors around the pollen peak, scaled to the index level.\n"
+            "People with allergies (4): a soft, non-restrictive hint, for example to limit long "
+            "walks during the pollen peak (usually 10:00-17:00, especially in wind) during the "
+            "flowering season from July to October, scaled to the index level. Never say "
+            "'avoid', 'must' or 'do not go outside', and do not list the months one by one.\n"
             "- Never advise mowing during flowering. Adapt to the data: high cropland share, a "
             "more specific action for landowners; high built-up share, a more specific action for "
             "municipal services (vacant lots, roadsides, construction sites).\n"
@@ -380,7 +384,8 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         "насіннєвий матеріал;\n"
         "- у разі виявлення: повідомити територіальний підрозділ Держпродспоживслужби для "
         "обстеження, зафіксувати місце й масштаб осередка (за можливості фото);\n"
-        "- пилок найактивніший зазвичай з 10:00 до 17:00, особливо у вітряні дні.\n\n"
+        "- пилок найактивніший зазвичай з 10:00 до 17:00, особливо у вітряні дні (використовуй "
+        "це лише щоб порадити обмежити тривалі прогулянки в такий час, ніколи як заборону).\n\n"
         "Поверни ЛИШЕ JSON-об'єкт, без markdown:\n"
         '{"reason": "...", "actions": ["...", "...", "...", "..."]}\n\n'
         "ПРАВИЛА:\n"
@@ -395,9 +400,11 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         f"- {level_rule} За нижчого рівня змінюється лише характер порад на профілактичний, "
         "жоден із чотирьох пунктів не випадає.\n"
         "- Чотири групи мають різнитися й не повторювати одна одну. Мешканці (3): власна ділянка "
-        "та повідомлення про осередки територіальному підрозділу Держпродспоживслужби. Алергіки "
-        "(4): сезон цвітіння (липень-жовтень) і планування часу надворі з урахуванням піку "
-        "пилку, відповідно до рівня індексу.\n"
+        "та повідомлення про осередки територіальному підрозділу Держпродспоживслужби. "
+        "Алергіки (4): м'яка, не категорична підказка, наприклад обмежити тривалі прогулянки "
+        "в години піку пилку (зазвичай 10:00-17:00, особливо у вітряну погоду) у сезон цвітіння "
+        "з липня до жовтня, відповідно до рівня індексу. Ніколи не пиши «уникати», «слід», "
+        "«не виходьте» і не перелічуй місяці по одному.\n"
         "- Ніколи не радь скошувати під час цвітіння. Підлаштуй під дані: висока частка ріллі, "
         "конкретніша дія для землевласників; висока частка забудови, конкретніша дія для "
         "комунальних служб (пустирі, узбіччя, будмайданчики).\n"
@@ -408,6 +415,7 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         "- Стиль: лаконічний, діловий, ландшафтно-обґрунтований, без дитячого тону й без "
         "академічного занудства."
     )
+
 
 def parse_llm_json(text, lang):
     text = text.strip()
@@ -423,6 +431,7 @@ def parse_llm_json(text, lang):
     titles = [g["title"] for g in TIP_GROUPS[lang]]
     groups = [{"title": t, "items": [a]} for t, a in zip(titles, actions)]
     return reason, groups
+
 
 @app.route("/api/explain", methods=["POST"])
 def explain():
@@ -467,35 +476,3 @@ def explain():
                 },
                 timeout=GEMINI_TIMEOUT,
             )
-            if resp.status_code == 503:
-                last_error = "503: " + resp.text[:300]
-                time.sleep(2 * (attempt + 1))
-                continue
-            if resp.status_code != 200:
-                last_error = f"{resp.status_code}: {resp.text[:300]}"
-                break
-            data = resp.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            reason, groups = parse_llm_json(text, lang)
-            break
-        except Exception as e:
-            last_error = str(e)
-            reason = None
-            time.sleep(2 * (attempt + 1))
-
-    if reason is None:
-        print(f"explain fallback: {last_error}")
-        return jsonify({
-            "explanation": fallback_explanation(
-                lang, place_name, risk_percent, percentile, category, climate, land),
-            "groups": TIP_GROUPS[lang],
-            "closing": closing,
-            "fallback": True,
-        })
-
-    return jsonify({"explanation": f"{intro} {reason}", "groups": groups, "closing": closing})
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
