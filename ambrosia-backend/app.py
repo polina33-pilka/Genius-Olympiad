@@ -54,30 +54,30 @@ GRID_LON = GRID_CLIMATE["lon_grid"].to_numpy()
 TIP_GROUPS = {
     "uk": [
         {"title": "Комунальним службам та ОТГ", "items": [
-            "Оглянути узбіччя, пустирі та будмайданчики до початку цвітіння й заплановати скошування.",
+            "Обстежувати узбіччя, пустирі та будмайданчики й скошувати їх до початку цвітіння, а про осередки повідомляти територіальний підрозділ Держпродспоживслужби.",
         ]},
         {"title": "Аграріям та землевласникам", "items": [
-            "Перевірити краї полів і перелоги та не допустити утворення насіння.",
+            "Дотримуватися сівозміни, контролювати очищення техніки та використовувати лише чистий насіннєвий матеріал.",
         ]},
         {"title": "Мешканцям", "items": [
-            "Тримати в порядку власну ділянку й повідомляти владі про великі зарості поруч із домом.",
+            "Скошувати або виривати рослини з корінням до початку цвітіння в рукавичках, масці й окулярах, а про осередки повідомляти територіальний підрозділ Держпродспоживслужби.",
         ]},
         {"title": "Алергікам", "items": [
-            "У серпні-вересні стежити за місцевими прогнозами пилку й планувати час надворі.",
+            "Сезон цвітіння триває з липня до жовтня, тож у цей період варто планувати час надворі з урахуванням піку пилку.",
         ]},
     ],
     "en": [
         {"title": "Municipal services and local communities", "items": [
-            "Inspect roadsides, vacant lots and construction sites before flowering and plan mowing.",
+            "Survey roadsides, vacant lots and construction sites and mow them before flowering, and report hotspots to the territorial office of the State Service (Derzhprodspozhyvsluzhba).",
         ]},
         {"title": "Farmers and landowners", "items": [
-            "Check field margins and fallow land and prevent seed formation.",
+            "Follow crop rotation, control the cleaning of machinery and use only clean seed material.",
         ]},
         {"title": "Residents", "items": [
-            "Keep your own plot tidy and report large patches of weeds near your home to the authorities.",
+            "Mow or pull plants up by the root before flowering, wearing gloves, a mask and glasses, and report hotspots to the territorial office of the State Service.",
         ]},
         {"title": "People with allergies", "items": [
-            "In August-September follow local pollen forecasts and plan time outdoors.",
+            "The flowering season runs from July to October, so during this period plan time outdoors with the pollen peak in mind.",
         ]},
     ],
 }
@@ -306,6 +306,21 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
             f"- Share of built-up land: {pct(land.get('built'), 'unknown')}%\n"
             f"- Mean May-September temperature: {num(climate.get('temp_mean'), 1, 'unknown')} °C\n"
             f"- Mean precipitation: {num(climate.get('precip_sum'), 1, 'unknown')} mm/day\n\n"
+            "FACTS (guidance of the State Service of Ukraine on Food Safety and Consumer "
+            "Protection). Use only these, invent nothing:\n"
+            "- flowering runs from July to October; seeds ripen in August-October;\n"
+            "- control must happen before flowering and seed formation must be prevented; mowing "
+            "DURING flowering promotes the release of pollen;\n"
+            "- hotspots are most often roadsides, vacant lots, construction sites, abandoned or "
+            "uncultivated land, company grounds and farmland;\n"
+            "- for the public (yards, vacant lots): mowing several times per season before "
+            "flowering, regular pulling up by the root with protective equipment (gloves, mask, glasses);\n"
+            "- for farmers: crop rotation, agrotechnical and chemical measures (never name products), "
+            "control of machinery cleaning, finding and eliminating hotspots before flowering, "
+            "using only clean seed material;\n"
+            "- if found: report to the territorial office of the State Service for an inspection, "
+            "record the place and scale of the hotspot (a photo if possible);\n"
+            "- pollen is usually most active from 10:00 to 17:00, especially on windy days.\n\n"
             "Return ONLY a JSON object, no markdown:\n"
             '{"reason": "...", "actions": ["...", "...", "...", "..."]}\n\n'
             "RULES:\n"
@@ -314,19 +329,19 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
             "definitely promote or hold back the plant. No introductory phrases, no childish "
             "wording, no heavy bureaucratic words, no comparison with other regions.\n"
             "- actions: you MUST ALWAYS generate all four, at EVERY index level including lower, "
-            "never skip or leave one empty. One short concrete sentence each (up to 20 words), for: "
+            "never skip or leave one empty. One short concrete sentence each (up to 25 words), for: "
             f"1) {titles[0]}; 2) {titles[1]}; 3) {titles[2]}; 4) {titles[3]}.\n"
             f"- {level_rule} At a lower level change only the character of the tips to preventive, "
             "do not drop any of the four.\n"
-            "- The four groups must be different and must not repeat each other. Residents (3) "
-            "are about their own plots and reporting overgrown land. People with allergies (4) "
-            "are about the flowering season (August-September) and planning time outdoors, "
-            "following pollen forecasts, scaled to the index level.\n"
-            "- Adapt to the data: high cropland share, more specific action for landowners "
-            "(field margins, fallow land); high built-up share, more specific action for "
+            "- The four groups must be different and must not repeat each other. Residents (3): "
+            "their own plot and reporting hotspots to the territorial office of the State Service. "
+            "People with allergies (4): the flowering season (July-October) and planning time "
+            "outdoors around the pollen peak, scaled to the index level.\n"
+            "- Never advise mowing during flowering. Adapt to the data: high cropland share, a "
+            "more specific action for landowners; high built-up share, a more specific action for "
             "municipal services (vacant lots, roadsides, construction sites).\n"
             "- No household tips (washing hair, closing windows), no doctors, no medications.\n"
-            "- Never call the index a probability. No herbicides or doses. No long dashes. "
+            "- Never call the index a probability. Do not name herbicides or doses. No long dashes. "
             "Do not add a disclaimer, it is added separately.\n"
             "- Style: concise, businesslike, grounded in the landscape."
         )
@@ -350,6 +365,22 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         f"- Частка забудови: {pct(land.get('built'))}%\n"
         f"- Середня температура травня-вересня: {dec(num(climate.get('temp_mean')), 'uk')} °C\n"
         f"- Середні опади: {dec(num(climate.get('precip_sum')), 'uk')} мм/день\n\n"
+        "ФАКТИ (рекомендації Держпродспоживслужби України). Користуйся лише ними, нічого не "
+        "вигадуй:\n"
+        "- цвітіння триває з липня до жовтня, насіння дозріває в серпні-жовтні;\n"
+        "- боротьбу слід вести до початку цвітіння й не допускати утворення насіння; скошування "
+        "ПІД ЧАС цвітіння сприяє викиду пилку;\n"
+        "- осередки найчастіше на узбіччях, пустирях, будмайданчиках, покинутих і необроблюваних "
+        "ділянках, територіях підприємств і в сільгоспугіддях;\n"
+        "- для населення (присадибні ділянки, двори, пустирі): скошування кілька разів за сезон "
+        "до початку цвітіння, регулярне виривання з корінням із засобами індивідуального захисту "
+        "(рукавички, маска, окуляри);\n"
+        "- для аграріїв: сівозміна, агротехнічні та хімічні заходи (назв препаратів не наводь), "
+        "контроль очищення техніки, виявлення й ліквідація осередків до цвітіння, лише чистий "
+        "насіннєвий матеріал;\n"
+        "- у разі виявлення: повідомити територіальний підрозділ Держпродспоживслужби для "
+        "обстеження, зафіксувати місце й масштаб осередка (за можливості фото);\n"
+        "- пилок найактивніший зазвичай з 10:00 до 17:00, особливо у вітряні дні.\n\n"
         "Поверни ЛИШЕ JSON-об'єкт, без markdown:\n"
         '{"reason": "...", "actions": ["...", "...", "...", "..."]}\n\n'
         "ПРАВИЛА:\n"
@@ -359,16 +390,17 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         "канцелярії («експансія», «вегетаційний період»), без порівнянь з іншими регіонами.\n"
         "- actions: ти ЗОБОВ'ЯЗАНИЙ ЗАВЖДИ згенерувати всі чотири пункти, за БУДЬ-ЯКОГО рівня "
         "індексу, зокрема нижчого, і ніколи не пропускати та не залишати порожніх. По одному "
-        f"короткому конкретному реченню (до 20 слів), для: 1) {titles[0]}; 2) {titles[1]}; "
+        f"короткому конкретному реченню (до 25 слів), для: 1) {titles[0]}; 2) {titles[1]}; "
         f"3) {titles[2]}; 4) {titles[3]}.\n"
         f"- {level_rule} За нижчого рівня змінюється лише характер порад на профілактичний, "
         "жоден із чотирьох пунктів не випадає.\n"
         "- Чотири групи мають різнитися й не повторювати одна одну. Мешканці (3): власна ділянка "
-        "та повідомлення про занедбані зарості. Алергіки (4): сезон цвітіння (серпень-вересень), "
-        "планування часу надворі та стеження за прогнозами пилку, відповідно до рівня індексу.\n"
-        "- Підлаштуй під дані: висока частка ріллі, конкретніша дія для землевласників (краї "
-        "полів, перелоги); висока частка забудови, конкретніша дія для комунальних служб "
-        "(пустирі, узбіччя, будмайданчики).\n"
+        "та повідомлення про осередки територіальному підрозділу Держпродспоживслужби. Алергіки "
+        "(4): сезон цвітіння (липень-жовтень) і планування часу надворі з урахуванням піку "
+        "пилку, відповідно до рівня індексу.\n"
+        "- Ніколи не радь скошувати під час цвітіння. Підлаштуй під дані: висока частка ріллі, "
+        "конкретніша дія для землевласників; висока частка забудови, конкретніша дія для "
+        "комунальних служб (пустирі, узбіччя, будмайданчики).\n"
         "- БЕЗ побутових порад (миття волосся, зачинені вікна), БЕЗ згадок про лікарів і ліки.\n"
         "- Ніколи не називай індекс ймовірністю. Без гербіцидів і доз. Без довгих тире. "
         "Пиши грамотно, вживай «рілля». Десяткові числа через кому. "
@@ -376,7 +408,6 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         "- Стиль: лаконічний, діловий, ландшафтно-обґрунтований, без дитячого тону й без "
         "академічного занудства."
     )
-
 
 def parse_llm_json(text, lang):
     text = text.strip()
