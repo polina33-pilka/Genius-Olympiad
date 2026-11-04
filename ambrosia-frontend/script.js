@@ -633,7 +633,7 @@ async function handleExplain() {
 
   const myId = ++explainRequestId;
   explainText.classList.remove("hidden");
-  explainText.textContent = t("loading");
+  explainText.textContent = t("explain_loading");
 
   let done = false;
   const wakeTimer = setTimeout(() => {
