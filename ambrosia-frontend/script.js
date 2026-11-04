@@ -597,19 +597,12 @@ function renderExplanation(data) {
   explainText.appendChild(body);
 
   (data.groups || []).forEach(group => {
-    const title = document.createElement("div");
-    title.style.fontWeight = "bold";
-    title.style.marginTop = "0.8rem";
-    title.textContent = group.title;
-    const list = document.createElement("ul");
-    list.style.margin = "0.3rem 0 0 1.2rem";
-    list.style.padding = "0";
-    group.items.forEach(item => {
-      const li = document.createElement("li");
-      li.textContent = item;
-      list.appendChild(li);
-    });
-    explainText.append(title, list);
+    const row = document.createElement("div");
+    row.style.marginTop = "0.6rem";
+    const title = document.createElement("strong");
+    title.textContent = group.title + ": ";
+    row.append(title, document.createTextNode(group.items.join(" ")));
+    explainText.appendChild(row);
   });
 
   if (data.closing) {
@@ -626,7 +619,6 @@ function renderExplanation(data) {
   note.textContent = data.fallback ? t("explain_fallback_note") : t("explain_ai_note");
   explainText.appendChild(note);
 }
-
 async function handleExplain() {
   if (!lastResult) return;
   const explainText = document.getElementById("explain-text");
