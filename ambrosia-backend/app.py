@@ -59,8 +59,11 @@ TIP_GROUPS = {
         {"title": "Аграріям та землевласникам", "items": [
             "Перевірити краї полів і перелоги та не допустити утворення насіння.",
         ]},
-        {"title": "Мешканцям та алергікам", "items": [
-            "У серпні-вересні стежити за місцевими прогнозами пилку та повідомляти владі про великі зарості.",
+        {"title": "Мешканцям", "items": [
+            "Тримати в порядку власну ділянку й повідомляти владі про великі зарості поруч із домом.",
+        ]},
+        {"title": "Алергікам", "items": [
+            "У серпні-вересні стежити за місцевими прогнозами пилку й планувати час надворі.",
         ]},
     ],
     "en": [
@@ -70,8 +73,11 @@ TIP_GROUPS = {
         {"title": "Farmers and landowners", "items": [
             "Check field margins and fallow land and prevent seed formation.",
         ]},
-        {"title": "Residents and people with allergies", "items": [
-            "In August-September follow local pollen forecasts and report large patches of weeds to the authorities.",
+        {"title": "Residents", "items": [
+            "Keep your own plot tidy and report large patches of weeds near your home to the authorities.",
+        ]},
+        {"title": "People with allergies", "items": [
+            "In August-September follow local pollen forecasts and plan time outdoors.",
         ]},
     ],
 }
@@ -283,7 +289,8 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
     if lang == "en":
         place_part = place_name or "this point"
         level_rule = {
-            "low": "Index is lower: routine, low-effort actions only (periodic observation), no urgency.",
+            "low": "Index is lower: the tips are PREVENTIVE (routine observation, keeping things "
+                   "tidy, awareness), not urgent.",
             "medium": "Index is medium: targeted checks of typical places and planning before flowering.",
             "high": "Index is higher: prioritised actions (inspections and mowing before flowering, "
                     "preventing seed formation), businesslike and without alarm.",
@@ -300,23 +307,25 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
             f"- Mean May-September temperature: {num(climate.get('temp_mean'), 1, 'unknown')} °C\n"
             f"- Mean precipitation: {num(climate.get('precip_sum'), 1, 'unknown')} mm/day\n\n"
             "Return ONLY a JSON object, no markdown:\n"
-            '{"reason": "...", "actions": ["...", "...", "..."]}\n\n'
+            '{"reason": "...", "actions": ["...", "...", "...", "..."]}\n\n'
             "RULES:\n"
             "- reason: ONE sentence naming which factor (cropland, built-up share, temperature or "
             "precipitation) most likely influenced this index. Do not claim the conditions "
             "definitely promote or hold back the plant. No introductory phrases, no childish "
             "wording, no heavy bureaucratic words, no comparison with other regions.\n"
-            f"- actions: exactly three, one short concrete sentence each (up to 20 words), for: "
-            f"1) {titles[0]}; 2) {titles[1]}; 3) {titles[2]}.\n"
-            f"- {level_rule}\n"
+            "- actions: you MUST ALWAYS generate all four, at EVERY index level including lower, "
+            "never skip or leave one empty. One short concrete sentence each (up to 20 words), for: "
+            f"1) {titles[0]}; 2) {titles[1]}; 3) {titles[2]}; 4) {titles[3]}.\n"
+            f"- {level_rule} At a lower level change only the character of the tips to preventive, "
+            "do not drop any of the four.\n"
+            "- The four groups must be different and must not repeat each other. Residents (3) "
+            "are about their own plots and reporting overgrown land. People with allergies (4) "
+            "are about the flowering season (August-September) and planning time outdoors, "
+            "following pollen forecasts, scaled to the index level.\n"
             "- Adapt to the data: high cropland share, more specific action for landowners "
             "(field margins, fallow land); high built-up share, more specific action for "
             "municipal services (vacant lots, roadsides, construction sites).\n"
-            "- The third action is a heads-up for residents and must explicitly mention people "
-            "with allergies: when the flowering season is (August-September) and what to pay "
-            "attention to, scaled to the index level (for lower, just be aware; for higher, "
-            "plan outdoor time and follow pollen forecasts). No household tips (washing hair, "
-            "closing windows), no doctors, no medications.\n"
+            "- No household tips (washing hair, closing windows), no doctors, no medications.\n"
             "- Never call the index a probability. No herbicides or doses. No long dashes. "
             "Do not add a disclaimer, it is added separately.\n"
             "- Style: concise, businesslike, grounded in the landscape."
@@ -324,7 +333,8 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
 
     place_part = place_name or "ця точка"
     level_rule = {
-        "low": "Індекс нижчий: лише прості дії без зусиль (періодичне спостереження), без терміновості.",
+        "low": "Індекс нижчий: поради ПРОФІЛАКТИЧНІ (періодичне спостереження, підтримання порядку, "
+               "обізнаність), не термінові.",
         "medium": "Індекс середній: цілеспрямовані огляди типових місць і планування перед цвітінням.",
         "high": "Індекс вищий: пріоритетні дії (огляди й скошування до цвітіння, недопущення "
                 "утворення насіння), по-діловому й без тривоги.",
@@ -341,23 +351,25 @@ def build_prompt(lang, lat, lon, place_name, risk_percent, percentile, category,
         f"- Середня температура травня-вересня: {dec(num(climate.get('temp_mean')), 'uk')} °C\n"
         f"- Середні опади: {dec(num(climate.get('precip_sum')), 'uk')} мм/день\n\n"
         "Поверни ЛИШЕ JSON-об'єкт, без markdown:\n"
-        '{"reason": "...", "actions": ["...", "...", "..."]}\n\n'
+        '{"reason": "...", "actions": ["...", "...", "...", "..."]}\n\n'
         "ПРАВИЛА:\n"
         "- reason: ОДНЕ речення про те, який фактор (рілля, забудова, температура чи опади) "
         "найімовірніше вплинув на цей індекс. Не стверджуй, що умови точно сприяють рослині чи "
         "стримують її. Без вступних фраз («Простими словами:»), без дитячих зворотів, без важкої "
         "канцелярії («експансія», «вегетаційний період»), без порівнянь з іншими регіонами.\n"
-        f"- actions: рівно три, по одному короткому конкретному реченню (до 20 слів), для: "
-        f"1) {titles[0]}; 2) {titles[1]}; 3) {titles[2]}.\n"
-        f"- {level_rule}\n"
+        "- actions: ти ЗОБОВ'ЯЗАНИЙ ЗАВЖДИ згенерувати всі чотири пункти, за БУДЬ-ЯКОГО рівня "
+        "індексу, зокрема нижчого, і ніколи не пропускати та не залишати порожніх. По одному "
+        f"короткому конкретному реченню (до 20 слів), для: 1) {titles[0]}; 2) {titles[1]}; "
+        f"3) {titles[2]}; 4) {titles[3]}.\n"
+        f"- {level_rule} За нижчого рівня змінюється лише характер порад на профілактичний, "
+        "жоден із чотирьох пунктів не випадає.\n"
+        "- Чотири групи мають різнитися й не повторювати одна одну. Мешканці (3): власна ділянка "
+        "та повідомлення про занедбані зарості. Алергіки (4): сезон цвітіння (серпень-вересень), "
+        "планування часу надворі та стеження за прогнозами пилку, відповідно до рівня індексу.\n"
         "- Підлаштуй під дані: висока частка ріллі, конкретніша дія для землевласників (краї "
         "полів, перелоги); висока частка забудови, конкретніша дія для комунальних служб "
         "(пустирі, узбіччя, будмайданчики).\n"
-        "- Третя дія це попередження для мешканців і має прямо згадувати людей з алергією: "
-        "коли сезон цвітіння (серпень-вересень) і на що звернути увагу, відповідно до рівня "
-        "індексу (для нижчого лише бути в курсі, для вищого планувати час надворі й стежити "
-        "за прогнозами пилку). БЕЗ побутових порад (миття волосся, зачинені вікна), БЕЗ "
-        "згадок про лікарів і ліки.\n"
+        "- БЕЗ побутових порад (миття волосся, зачинені вікна), БЕЗ згадок про лікарів і ліки.\n"
         "- Ніколи не називай індекс ймовірністю. Без гербіцидів і доз. Без довгих тире. "
         "Пиши грамотно, вживай «рілля». Десяткові числа через кому. "
         "Не додавай застереження, воно додається окремо.\n"
@@ -375,7 +387,7 @@ def parse_llm_json(text, lang):
     data = json.loads(text)
     reason = str(data["reason"]).strip()
     actions = [str(a).strip() for a in data["actions"]]
-    if not reason or len(actions) != 3 or not all(actions):
+    if not reason or len(actions) != 4 or not all(actions):
         raise ValueError("unexpected structure")
     titles = [g["title"] for g in TIP_GROUPS[lang]]
     groups = [{"title": t, "items": [a]} for t, a in zip(titles, actions)]
@@ -445,7 +457,7 @@ def explain():
         return jsonify({
             "explanation": fallback_explanation(
                 lang, place_name, risk_percent, percentile, category, climate, land),
-            "groups": TIP_GROUPS[lang] if category in ("medium", "high") else [],
+            "groups": TIP_GROUPS[lang],
             "closing": closing,
             "fallback": True,
         })
