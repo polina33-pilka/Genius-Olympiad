@@ -476,3 +476,35 @@ def explain():
                 },
                 timeout=GEMINI_TIMEOUT,
             )
+            if resp.status_code == 503:
+                last_error = "503: " + resp.text[:300]
+                time.sleep(2 * (attempt + 1))
+                continue
+            if resp.status_code != 200:
+                last_error = f"{resp.status_code}: {resp.text[:300]}"
+                break
+            data = resp.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            reason, groups = parse_llm_json(text, lang)
+            break
+        except Exception as e:
+            last_error = str(e)
+            reason = None
+            time.sleep(2 * (attempt + 1))
+
+    if reason is None:
+        print(f"explain fallback: {last_error}")
+        return jsonify({
+            "explanation": fallback_explanation(
+                lang, place_name, risk_percent, percentile, category, climate, land),
+            "groups": TIP_GROUPS[lang],
+            "closing": closing,
+            "fallback": True,
+        })
+
+    return jsonify({"explanation": f"{intro} {reason}", "groups": groups, "closing": closing})
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
