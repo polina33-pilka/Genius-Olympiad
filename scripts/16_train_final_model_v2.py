@@ -4,10 +4,10 @@ import joblib
 import numpy as np
 import pandas as pd
 import sklearn
-from ukraine_border import in_ukraine
 from sklearn.model_selection import GroupKFold, cross_val_score
 
 from common import CLIMATE, LAND, make_rf, spatial_blocks
+from ukraine_border import in_ukraine
 
 FEATURES = CLIMATE + LAND
 Q_MEDIUM, Q_HIGH = 0.50, 0.80
